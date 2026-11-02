@@ -6,8 +6,8 @@ const CATEGORIES = {
   moderation: {
     label: 'Moderation',
     emoji: '🛡️',
-    description: 'Kick, ban, timeouts, warnings',
-    commands: ['kick', 'ban', 'unban', 'timeout', 'untimeout', 'warn', 'unwarn', 'warnings'],
+    description: 'Kick, ban, timeouts, warnings, auto-mod',
+    commands: ['kick', 'ban', 'unban', 'timeout', 'untimeout', 'warn', 'unwarn', 'warnings', 'automod'],
   },
   channels: {
     label: 'Channels',

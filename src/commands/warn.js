@@ -19,7 +19,8 @@ function buildWarningsView(guildId, userId) {
   }
 
   const lines = warnings.map(
-    (w) => `**#${w.id}** • <t:${Math.floor(w.createdAt / 1000)}:d> by <@${w.moderatorId}>\n${w.reason}`,
+    (w) =>
+      `**#${w.id}** • <t:${Math.floor(w.createdAt / 1000)}:d> by ${w.moderatorId ? `<@${w.moderatorId}>` : 'auto-mod'}\n${w.reason}`,
   );
   const embed = makeEmbed(
     'warn',

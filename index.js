@@ -5,6 +5,7 @@ const logs = require('./src/logs');
 const giveaways = require('./src/giveaways');
 const levels = require('./src/levels');
 const chat = require('./src/chat');
+const automod = require('./src/automod');
 const { fail, isBotOwner } = require('./src/utils');
 
 if (!config.token) {
@@ -35,6 +36,7 @@ loader.init();
 logs.register(client);
 levels.register(client);
 chat.register(client);
+automod.register(client);
 
 function friendlyError(err) {
   if (err.code === 50013) return 'I am missing the permissions needed for this action.';

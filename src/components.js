@@ -1,4 +1,4 @@
-const { MessageFlags } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { claimTicket, closeTicket, createTicket, findOpenTicket, TICKET_TYPES } = require('./tickets');
 const { handleUnwarnSelect } = require('./commands/warn');
 const { handleUnbanSelect } = require('./commands/moderation');
@@ -28,6 +28,18 @@ async function handleTicketSelect(interaction) {
   return interaction.editReply({ content: `Your ticket is ready: ${channel}` });
 }
 
+// The unblock dropdown of /automod remove: only admins with Manage Server may use it.
+async function handleAutomodRemoveSelect(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+    return interaction.update({
+      content: 'You need the Manage Server permission to do that.',
+      embeds: [],
+      components: [],
+    });
+  }
+  return require('./commands/automod').handleRemoveSelect(interaction);
+}
+
 // Routes button and select menu interactions by customId.
 async function handleComponent(interaction) {
   const id = interaction.customId;
@@ -36,6 +48,7 @@ async function handleComponent(interaction) {
   if (id === 'ticket:claim') return claimTicket(interaction);
   if (id === 'ticket:close') return closeTicket(interaction);
   if (id.startsWith('unwarn:select:')) return handleUnwarnSelect(interaction);
+  if (id === 'automod:remove') return handleAutomodRemoveSelect(interaction);
   if (id === 'unban:select') return handleUnbanSelect(interaction);
   if (id.startsWith('giveaway:join:')) return joinGiveaway(interaction);
   if (id === 'help:select') return handleHelpSelect(interaction, require('./loader').allCommands());
