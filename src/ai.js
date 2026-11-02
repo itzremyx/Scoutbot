@@ -198,10 +198,12 @@ async function learnFromExchange(guildId, userId, speaker, question, answer) {
 }
 
 // Answers one question, using the channel's saved chat history and what the bot knows about the user.
-async function chat({ channelId, guildId, botName, userId, speaker, question }) {
+// onProgress(text) is called before each step so the caller can show what the bot is doing.
+async function chat({ channelId, guildId, botName, userId, speaker, question, onProgress = () => {} }) {
   budget.checkCooldown(userId);
   const history = conversation(channelId);
   const userMessage = { role: 'user', content: `${speaker}: ${question}` };
+  onProgress('Thinking about your question…');
   const answer = await callModel(systemPrompt(botName, speaker, userId, guildId), [...history, userMessage]);
 
   history.push(userMessage, { role: 'assistant', content: answer });

@@ -66,6 +66,13 @@ function register(client) {
 
     if (await captureInstruction(message, question).catch(() => false)) return;
 
+    // One status message shows each step, then becomes the answer. Edits run in order so a late
+    // progress edit can never overwrite the final answer.
+    const shown = await message.reply('⏳ Starting…').catch(() => null);
+    let queue = Promise.resolve();
+    const progress = (text) => {
+      queue = queue.then(() => shown?.edit(text)).catch(() => {});
+    };
     await message.channel.sendTyping().catch(() => {});
     // The typing indicator only lasts a few seconds; refresh it while the AI thinks.
     const typing = setInterval(() => message.channel.sendTyping().catch(() => {}), 8000);
@@ -77,12 +84,17 @@ function register(client) {
         userId: message.author.id,
         speaker: message.author.username,
         question,
+        onProgress: progress,
       });
+      await queue;
       const [first, ...rest] = splitText(answer);
-      await message.reply(first);
+      if (shown) await shown.edit(first).catch(() => message.reply(first));
+      else await message.reply(first);
       for (const part of rest) await message.channel.send(part);
     } catch (err) {
-      await message.reply(`⚠️ ${err.message}`).catch(() => {});
+      await queue;
+      const text = `⚠️ ${err.message}`;
+      await (shown ? shown.edit(text) : message.reply(text)).catch(() => {});
     } finally {
       clearInterval(typing);
     }
