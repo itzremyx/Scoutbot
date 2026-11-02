@@ -1,7 +1,8 @@
 // Posts new ScoutCode commits to the changelog channel, and a new CHANGELOG version to the update channel.
 // Watches the public repo's main branch every minute. The last announced commit and version are kept in
-// store.settings.updates so a restart does not repost anything. The first run only records the current
-// state: it never floods a channel with the repo's existing history.
+// store.settings.updates so a restart does not repost anything. When nothing was ever announced (fresh
+// start, or the watcher came online after the last push) the current head is posted once, so the channels
+// are never left empty.
 const { Events } = require('discord.js');
 const config = require('./config');
 const store = require('./storage');
@@ -73,11 +74,28 @@ async function latestChangelog() {
   return { version: match[1].trim(), body: match[2].trim() };
 }
 
+// Returns true only when the message was really sent, so the caller retries instead of silently losing a
+// post. Every outcome is logged: an empty channel should never be a mystery.
 async function postTo(client, channelId, embed) {
-  if (!channelId) return;
-  const channel = await client.channels.fetch(channelId).catch(() => null);
-  if (!channel?.isTextBased()) return;
-  await channel.send({ embeds: [embed] }).catch((err) => console.error('Update post failed:', err.message));
+  if (!channelId) {
+    console.error('Updates: no channel id configured');
+    return false;
+  }
+  const title = embed.data?.title ?? 'update';
+  const channel = await client.channels.fetch(channelId).catch((err) => {
+    console.error(`Updates: cannot open channel ${channelId}: ${err.message}`);
+    return null;
+  });
+  if (!channel?.isTextBased()) {
+    console.error(`Updates: channel ${channelId} is missing or is not a text channel`);
+    return false;
+  }
+  const sent = await channel.send({ embeds: [embed] }).catch((err) => {
+    console.error(`Updates: sending "${title}" to ${channelId} failed: ${err.message}`);
+    return null;
+  });
+  if (sent) console.log(`Updates: posted "${title}" to channel ${channelId}`);
+  return Boolean(sent);
 }
 
 // Runs one check. Returns how many commits were announced.
@@ -86,35 +104,42 @@ async function checkOnce(client) {
   const list = await fetchCommits();
   const log = await latestChangelog().catch(() => null);
 
-  // First run: remember where we are, announce nothing.
+  // First run: remember where we are so only later commits count as new.
   if (!s.lastSha) {
-    if (list?.length) {
-      s.lastSha = list[0].sha;
-      s.lastChangelog = log?.version ?? null;
-      store.save();
-    }
-    return 0;
+    if (!list?.length) return 0;
+    s.lastSha = list[0].sha;
+    store.save();
   }
 
-  // Every commit goes to the changelog channel.
+  // Nothing has ever been announced: post the current head once so the channels are not empty.
+  // `announced` stops it from repeating on later checks and restarts.
+  const baseline = s.announced === 0;
   const fresh = list ? newCommits(list, s.lastSha) : [];
-  for (const commit of fresh.map(parseCommit)) {
+  const toPost = fresh.length ? fresh : (baseline && list?.length ? [list[0]] : []);
+
+  let posted = 0;
+  for (const commit of toPost.map(parseCommit)) {
     const lines = [`\`${commit.short}\` ${commit.subject}`];
     if (commit.body) lines.push('', truncate(commit.body, 800));
     lines.push('', `[View commit](${commit.url}) · by ${commit.author}`);
-    await postTo(client, config.changelogChannelId, makeEmbed('info', 'Commit', lines.join('\n')));
+    // State only moves after a successful post: a failed send is retried next check.
+    const ok = await postTo(client, config.changelogChannelId, makeEmbed('info', 'Commit', lines.join('\n')));
+    if (!ok) break;
     s.lastSha = commit.sha;
     s.announced += 1;
+    posted += 1;
     store.save();
   }
 
   // A new version in CHANGELOG.md goes to the update channel, once per version.
   if (log && log.version !== s.lastChangelog) {
-    await postTo(client, config.updateChannelId, makeEmbed('success', `Update ${log.version}`, truncate(log.body || 'No details.', 3800)));
-    s.lastChangelog = log.version;
-    store.save();
+    const ok = await postTo(client, config.updateChannelId, makeEmbed('success', `Update ${log.version}`, truncate(log.body || 'No details.', 3800)));
+    if (ok) {
+      s.lastChangelog = log.version;
+      store.save();
+    }
   }
-  return fresh.length;
+  return posted;
 }
 
 function register(client) {
@@ -131,6 +156,7 @@ function register(client) {
     }
   };
   client.once(Events.ClientReady, () => {
+    console.log(`Updates: watching ${REPO} (${BRANCH}) every ${CHECK_EVERY_MS / 1000}s`);
     tick();
     setInterval(tick, CHECK_EVERY_MS);
   });
