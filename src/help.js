@@ -12,8 +12,8 @@ const CATEGORIES = {
   channels: {
     label: 'Channels',
     emoji: '💬',
-    description: 'Purge, slowmode, lock',
-    commands: ['purge', 'slowmode', 'lock', 'unlock'],
+    description: 'Purge, slowmode, lock, sticky messages',
+    commands: ['purge', 'slowmode', 'lock', 'unlock', 'sticky'],
   },
   levels: {
     label: 'Levels',

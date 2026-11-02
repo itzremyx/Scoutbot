@@ -29,6 +29,7 @@ const CATEGORIES = {
   emojis: 'Emojis & stickers',
   events: 'Scheduled events',
   automod: 'AutoMod',
+  stickies: 'Sticky messages',
 };
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -75,7 +76,8 @@ function remember(message) {
   while (recentMessages.size > RECENT_CAP) recentMessages.delete(recentMessages.keys().next().value);
 }
 
-// Rows are [name, value, inline]. Rows with an empty value are skipped.
+// Rows are [name, value, inline]. Rows with an empty value are skipped. A value of '-' prints
+// an em dash: a field whose value is deliberately empty still needs its name to show up.
 function logEmbed(kind, title, fields) {
   const embed = makeEmbed(kind, title);
   embed.addFields(
@@ -83,7 +85,7 @@ function logEmbed(kind, title, fields) {
       .filter((row) => row && row[1] !== null && row[1] !== undefined && row[1] !== '')
       .map(([name, value, inline = false]) => ({
         name,
-        value: truncate(String(value), 1000),
+        value: value === '—' ? value : truncate(String(value), 1000),
         inline,
       })),
   );
@@ -777,4 +779,4 @@ function register(client) {
   client.on(Events.AutoModerationActionExecution, safe(onAutoModAction));
 }
 
-module.exports = { register, CATEGORIES, logConfig };
+module.exports = { register, CATEGORIES, logConfig, post, shouldLog };
