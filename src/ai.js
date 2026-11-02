@@ -166,6 +166,9 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
   for (let round = 0; ; round++) {
     // Once tool rounds are used up, ask for a plain answer so the loop always ends.
     const useTools = tools && round < MAX_TOOL_ROUNDS;
+    // Show what is happening while the request runs: the first round is thinking, every later
+    // round is the model reading what the tools brought back (a search round announces itself).
+    onProgress(round === 0 ? 'Thinking about your question…' : 'Reading the results…');
     let { response, data, payload } = await ask(activeModelName, useTools);
 
     // 400/404 means the model itself was rejected (renamed or removed): retry once with the fallback.
@@ -279,7 +282,6 @@ async function chat({ channelId, guildId, botName, userId, speaker, question, on
   budget.checkCooldown(userId);
   const history = conversation(channelId);
   const userMessage = { role: 'user', content: `${speaker}: ${question}` };
-  onProgress('Thinking about your question…');
   const answer = await callModel(systemPrompt(botName, speaker, userId, guildId), [...history, userMessage], {
     tools: TOOLS,
     onProgress,

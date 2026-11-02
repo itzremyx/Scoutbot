@@ -67,12 +67,25 @@ function register(client) {
     if (await captureInstruction(message, question).catch(() => false)) return;
 
     // One status message shows each step, then becomes the answer. Edits run in order so a late
-    // progress edit can never overwrite the final answer.
-    const shown = await message.reply('⏳ Starting…').catch(() => null);
+    // progress edit can never overwrite the final answer. The status message is only sent after a
+    // short delay, so an answer that comes back immediately is posted as a plain reply instead of
+    // leaving a stray "Starting…" message behind; the latest step text is used when it is sent.
+    let shown = null;
+    let finished = false;
+    let lastStatus = null;
     let queue = Promise.resolve();
     const progress = (text) => {
+      lastStatus = text;
       queue = queue.then(() => shown?.edit(text)).catch(() => {});
     };
+    const shownReady = new Promise((resolve) => {
+      setTimeout(() => {
+        if (finished) return resolve();
+        message.reply(lastStatus ?? '⏳ Starting…')
+          .then((shownMsg) => { shown = shownMsg; resolve(); })
+          .catch(() => resolve());
+      }, 400);
+    });
     await message.channel.sendTyping().catch(() => {});
     // The typing indicator only lasts a few seconds; refresh it while the AI thinks.
     const typing = setInterval(() => message.channel.sendTyping().catch(() => {}), 8000);
@@ -86,13 +99,18 @@ function register(client) {
         question,
         onProgress: progress,
       });
+      await shownReady;
       await queue;
+      finished = true;
       const [first, ...rest] = splitText(answer);
       if (shown) await shown.edit(first).catch(() => message.reply(first));
       else await message.reply(first);
       for (const part of rest) await message.channel.send(part);
     } catch (err) {
+      clearInterval(typing);
+      await shownReady;
       await queue;
+      finished = true;
       const text = `⚠️ ${err.message}`;
       await (shown ? shown.edit(text) : message.reply(text)).catch(() => {});
     } finally {
