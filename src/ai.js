@@ -253,11 +253,9 @@ async function extractInstruction(text) {
   return !rule || /^none\.?$/i.test(rule) ? null : rule;
 }
 
-// Runs after each reply in the background. New facts are queued for a server admin to approve;
-// they only go live after approval. Outside a server there is no admin, so nothing is learned.
-// Failures are ignored.
+// Runs after each reply in the background. Facts learned automatically go live immediately in both
+// servers and DMs; failures are ignored. Server rules (guild.instructions) stay admin-only.
 async function learnFromExchange(guildId, userId, speaker, question, answer) {
-  if (!guildId) return;
   try {
     const known = memory.getFacts(userId).map((fact) => `[id ${fact.id}] ${fact.text}`);
     const raw = await callModel(
@@ -269,7 +267,7 @@ async function learnFromExchange(guildId, userId, speaker, question, answer) {
       { maxTokens: 1024, effort: 'low' },
     );
     for (const update of parseFacts(raw)) {
-      memory.addPendingFact(guildId, userId, update.text, update.replaces);
+      memory.learnFact(guildId, userId, update.text, update.replaces);
     }
   } catch (err) {
     console.error('Memory update skipped:', err.message);

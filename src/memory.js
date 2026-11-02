@@ -24,6 +24,16 @@ function addFact(userId, text) {
   return fact;
 }
 
+// A fact the bot learned on its own goes live immediately (no admin approval step).
+// `replaces` is an outdated fact id: it is dropped first, and an empty `text` only removes it.
+// Returns the saved fact, true when only a removal happened, or null when nothing changed.
+function learnFact(_guildId, userId, text, replaces = null) {
+  const replaceId = replaces !== null && getFacts(userId).some((fact) => fact.id === replaces) ? replaces : null;
+  if (replaceId !== null) removeFact(userId, replaceId);
+  if (!text) return replaceId !== null ? true : null;
+  return addFact(userId, text);
+}
+
 function removeFact(userId, factId) {
   const facts = store.data.users[userId]?.facts ?? [];
   const index = facts.findIndex((fact) => fact.id === factId);
@@ -125,6 +135,7 @@ function removeInstruction(guildId, id) {
 module.exports = {
   getFacts,
   addFact,
+  learnFact,
   removeFact,
   clearFacts,
   getInstructions,
