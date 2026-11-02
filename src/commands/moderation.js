@@ -6,6 +6,7 @@ const {
   StringSelectMenuBuilder,
 } = require('discord.js');
 const { checkTarget, dmUser, fail, fetchMember, hasPerm, makeEmbed, sendLog, truncate } = require('../utils');
+const { addModlogEntry } = require('../modlog');
 
 const DAY_MS = 86_400_000;
 const MAX_TIMEOUT_MS = 28 * DAY_MS; // Discord's limit
@@ -28,7 +29,9 @@ async function getModeratableMember(interaction, user) {
   return member;
 }
 
-function logModeration(interaction, title, userId, reason, extra = '') {
+function logModeration(interaction, action, title, userId, reason, extra = '') {
+  // Keeps the permanent history (/modlog) next to the channel log.
+  addModlogEntry(interaction.guild.id, { userId, action, reason, moderatorId: interaction.user.id });
   return sendLog(interaction.guild, {
     embeds: [
       makeEmbed(
@@ -47,7 +50,7 @@ async function handleUnbanSelect(interaction) {
 
   const userId = interaction.values[0];
   await interaction.guild.bans.remove(userId, `Unbanned by ${interaction.user.username}`);
-  await logModeration(interaction, 'Member unbanned', userId, 'Unbanned from the ban list');
+  await logModeration(interaction, 'unban', 'Member unbanned', userId, 'Unbanned from the ban list');
   return interaction.update({ content: `✅ Unbanned <@${userId}>.`, components: [] });
 }
 
@@ -76,7 +79,7 @@ module.exports = {
 
       await dmUser(user, makeEmbed('error', `You were kicked from ${interaction.guild.name}`, `**Reason:** ${reason}`));
       await member.kick(`${reason} (by ${interaction.user.username})`);
-      await logModeration(interaction, 'Member kicked', user.id, reason);
+      await logModeration(interaction, 'kick', 'Member kicked', user.id, reason);
       return interaction.reply({
         embeds: [makeEmbed('success', 'Member kicked', `<@${user.id}> was kicked.\n**Reason:** ${reason}`)],
       });
@@ -120,7 +123,7 @@ module.exports = {
         reason: `${reason} (by ${interaction.user.username})`,
         deleteMessageSeconds: deleteDays * DAY_MS / 1000,
       });
-      await logModeration(interaction, 'Member banned', user.id, reason);
+      await logModeration(interaction, 'ban', 'Member banned', user.id, reason);
       return interaction.reply({
         embeds: [makeEmbed('error', 'User banned', `<@${user.id}> was banned.\n**Reason:** ${reason}`)],
       });
@@ -152,7 +155,7 @@ module.exports = {
           .catch(() => false);
         if (!removed) return fail(interaction, 'That user is not banned or the ID is invalid.');
 
-        await logModeration(interaction, 'Member unbanned', userId, 'Unbanned by ID');
+        await logModeration(interaction, 'unban', 'Member unbanned', userId, 'Unbanned by ID');
         return interaction.reply({ embeds: [makeEmbed('success', 'User unbanned', `<@${userId}> was unbanned.`)] });
       }
 
@@ -219,7 +222,7 @@ module.exports = {
 
       await dmUser(user, makeEmbed('warn', `You were timed out in ${interaction.guild.name}`, `**Duration:** ${label}\n**Reason:** ${reason}`));
       await member.timeout(ms, `${reason} (by ${interaction.user.username})`);
-      await logModeration(interaction, 'Member timed out', user.id, reason, `\n**Duration:** ${label}`);
+      await logModeration(interaction, 'timeout', 'Member timed out', user.id, reason, `\n**Duration:** ${label}`);
       return interaction.reply({
         embeds: [makeEmbed('warn', 'Member timed out', `<@${user.id}> was timed out for ${label}.\n**Reason:** ${reason}`)],
       });
@@ -248,7 +251,7 @@ module.exports = {
       if (!member.isCommunicationDisabled()) return fail(interaction, 'That member is not timed out.');
 
       await member.timeout(null, `${reason} (by ${interaction.user.username})`);
-      await logModeration(interaction, 'Timeout removed', user.id, reason);
+      await logModeration(interaction, 'untimeout', 'Timeout removed', user.id, reason);
       return interaction.reply({
         embeds: [makeEmbed('success', 'Timeout removed', `<@${user.id}> can talk again.\n**Reason:** ${reason}`)],
       });

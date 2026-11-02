@@ -1,6 +1,7 @@
 const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const store = require('../storage');
 const { fail, hasPerm, makeEmbed, sendLog } = require('../utils');
+const { addModlogEntry } = require('../modlog');
 
 const MAX_PURGE = 100;
 const SLOWMODE_MAX = 21600; // Discord's limit: 6 hours
@@ -41,6 +42,13 @@ const purge = {
     }
 
     const deleted = await interaction.channel.bulkDelete(targets, true);
+    addModlogEntry(interaction.guild.id, {
+      userId: interaction.user.id,
+      action: 'purge',
+      reason: `${deleted.size} message(s) in ${interaction.channel}${user ? ` (only <@${user.id}>)` : ''}`,
+      moderatorId: interaction.user.id,
+      meta: { channel: interaction.channelId },
+    });
     await logAction(interaction, 'Messages purged', `**Deleted:** ${deleted.size}${user ? `\n**Only from:** <@${user.id}>` : ''}`);
     return interaction.editReply({
       embeds: [makeEmbed('success', 'Purge complete', `Deleted ${deleted.size} message(s). Messages older than 14 days cannot be bulk-deleted.`)],

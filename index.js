@@ -8,6 +8,7 @@ const chat = require('./src/chat');
 const automod = require('./src/automod');
 const updates = require('./src/updates');
 const stickies = require('./src/stickies');
+const reminders = require('./src/reminders');
 const { fail, isBotOwner } = require('./src/utils');
 
 if (!config.token) {
@@ -56,6 +57,7 @@ client.once(Events.ClientReady, async (c) => {
   console.log(`Registered ${count} slash commands. Global commands can take up to an hour to show up.`);
   giveaways.startScheduler(c);
   levels.startScheduler(c);
+  reminders.startScheduler(c);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

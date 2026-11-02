@@ -6,14 +6,14 @@ const CATEGORIES = {
   moderation: {
     label: 'Moderation',
     emoji: '🛡️',
-    description: 'Kick, ban, timeouts, warnings, auto-mod',
-    commands: ['kick', 'ban', 'unban', 'timeout', 'untimeout', 'warn', 'unwarn', 'warnings', 'automod'],
+    description: 'Kick, ban, timeouts, warnings, auto-mod, moderation history',
+    commands: ['kick', 'ban', 'unban', 'timeout', 'untimeout', 'warn', 'unwarn', 'warnings', 'automod', 'modlog'],
   },
   channels: {
     label: 'Channels',
     emoji: '💬',
-    description: 'Purge, slowmode, lock, sticky messages',
-    commands: ['purge', 'slowmode', 'lock', 'unlock', 'sticky'],
+    description: 'Purge, slowmode, lock, sticky messages, polls',
+    commands: ['purge', 'slowmode', 'lock', 'unlock', 'sticky', 'poll'],
   },
   levels: {
     label: 'Levels',
@@ -48,8 +48,8 @@ const CATEGORIES = {
   utility: {
     label: 'Utility',
     emoji: '🧰',
-    description: 'Server and user info',
-    commands: ['help', 'ping', 'avatar', 'userinfo', 'serverinfo'],
+    description: 'Server and user info, reminders',
+    commands: ['help', 'ping', 'avatar', 'userinfo', 'serverinfo', 'remind'],
   },
   owner: {
     label: 'Bot owner',

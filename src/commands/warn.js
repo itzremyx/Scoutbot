@@ -6,6 +6,7 @@ const {
   StringSelectMenuBuilder,
 } = require('discord.js');
 const store = require('../storage');
+const { addModlogEntry, removeWarningEntry } = require('../modlog');
 const { checkTarget, dmUser, fail, fetchMember, hasPerm, makeEmbed, sendLog, truncate } = require('../utils');
 
 const MOD_PERMISSION = PermissionFlagsBits.ModerateMembers;
@@ -42,18 +43,17 @@ function buildWarningsView(guildId, userId) {
 }
 
 function removeWarning(guildId, userId, warningId) {
-  const settings = store.guild(guildId);
-  const list = settings.warnings[userId] ?? [];
-  const index = list.findIndex((w) => w.id === warningId);
-  if (index === -1) return null;
-
-  const [removed] = list.splice(index, 1);
-  if (!list.length) delete settings.warnings[userId];
-  store.save();
-  return removed;
+  return removeWarningEntry(guildId, userId, warningId);
 }
 
 function logWarningRemoval(interaction, userId, warningId) {
+  addModlogEntry(interaction.guild.id, {
+    userId,
+    action: 'unwarn',
+    reason: `Warning #${warningId} removed`,
+    moderatorId: interaction.user.id,
+    meta: { warningId },
+  });
   return sendLog(interaction.guild, {
     embeds: [
       makeEmbed(
@@ -113,6 +113,13 @@ const warn = {
     const warning = { id: settings.nextWarningId++, reason, moderatorId: interaction.user.id, createdAt: Date.now() };
     (settings.warnings[user.id] ??= []).push(warning);
     store.save();
+    addModlogEntry(guild.id, {
+      userId: user.id,
+      action: 'warn',
+      reason,
+      moderatorId: interaction.user.id,
+      meta: { warningId: warning.id },
+    });
 
     await dmUser(user, makeEmbed('warn', `You received a warning in ${guild.name}`, `**Reason:** ${reason}`));
     await sendLog(guild, {

@@ -1,5 +1,6 @@
 const { Events, PermissionFlagsBits } = require('discord.js');
 const store = require('./storage');
+const { addModlogEntry } = require('./modlog');
 const { makeEmbed, sendLog, truncate } = require('./utils');
 
 // Defaults for a server that has not configured auto-moderation yet. Each strike is a warning;
@@ -51,6 +52,13 @@ async function handleMessage(message) {
 
   const warning = addStrike(message.guild.id, message.author.id, `Blocked word in #${message.channel.name ?? message.channelId}`);
   const total = store.guild(message.guild.id).warnings[message.author.id].length;
+  const willTimeout = total >= config.timeoutAt;
+  addModlogEntry(message.guild.id, {
+    userId: message.author.id,
+    action: willTimeout ? 'automod_timeout' : 'automod',
+    reason: `Blocked word in #${message.channel.name ?? message.channelId}`,
+    meta: { warningId: warning.id, channel: message.channel.name ?? message.channelId },
+  });
   const shown = truncate(message.content || '(no text)', 500);
   const notice = makeEmbed(
     'warn',
@@ -65,7 +73,7 @@ async function handleMessage(message) {
   );
   await message.channel.send({ content: `<@${message.author.id}>`, embeds: [notice] }).catch(() => {});
 
-  if (total >= config.timeoutAt) {
+  if (willTimeout) {
     await message.member
       ?.timeout(config.timeoutMinutes * 60_000, `Auto-mod: warning ${total}/${config.timeoutAt}`)
       .catch(() => {});
@@ -76,7 +84,7 @@ async function handleMessage(message) {
       makeEmbed(
         'warn',
         'Auto-mod warning',
-        `**Member:** <@${message.author.id}>\n**Warning:** #${warning.id} (${total} total)\n**Channel:** <#${message.channelId}>\n**Action:** message removed${total >= config.timeoutAt ? `, timed out ${config.timeoutMinutes} min` : ''}`,
+        `**Member:** <@${message.author.id}>\n**Warning:** #${warning.id} (${total} total)\n**Channel:** <#${message.channelId}>\n**Action:** message removed${willTimeout ? `, timed out ${config.timeoutMinutes} min` : ''}`,
       ),
     ],
   });
