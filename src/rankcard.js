@@ -1,7 +1,7 @@
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
 const W = 900;
-const H = 300;
+const H = 340;
 const FONT = '22px Consolas, "Cascadia Mono", "Courier New", monospace';
 const TEXT_FONT = '20px Consolas, "Cascadia Mono", "Courier New", monospace';
 const SMALL_FONT = '16px Consolas, "Cascadia Mono", "Courier New", monospace';
@@ -118,6 +118,16 @@ function drawTokens(ctx, x, y, tokens) {
 
 const shorten = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
+// "2h 14m", "45m" or "3h" — voice time as hours and minutes.
+function formatDuration(ms) {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours && rest) return `${hours}h ${rest}m`;
+  if (hours) return `${hours}h`;
+  return `${rest}m`;
+}
+
 async function loadAvatar(url) {
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
@@ -129,7 +139,7 @@ async function loadAvatar(url) {
 }
 
 // Renders a code-editor style card and returns PNG bytes. The avatar is only kept in memory.
-async function renderRankCard({ username, avatarUrl, themeId, level, xp, floor, next, rank }) {
+async function renderRankCard({ username, avatarUrl, themeId, level, xp, floor, next, rank, messages = 0, voiceMs = 0 }) {
   const theme = THEMES[themeId] ?? THEMES.claude;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
@@ -173,6 +183,8 @@ async function renderRankCard({ username, avatarUrl, themeId, level, xp, floor, 
     [['const', SYNTAX.keyword], [' xp', SYNTAX.name], [' = ', SYNTAX.punct], [String(xp), SYNTAX.number], [';', SYNTAX.punct]],
     [['const', SYNTAX.keyword], [' nextLevel', SYNTAX.name], [' = ', SYNTAX.punct], [String(next), SYNTAX.number], [';', SYNTAX.punct]],
     [['const', SYNTAX.keyword], [' rank', SYNTAX.name], [' = ', SYNTAX.punct], [JSON.stringify(`#${rank}`), SYNTAX.string], [';', SYNTAX.punct]],
+    [['const', SYNTAX.keyword], [' messages', SYNTAX.name], [' = ', SYNTAX.punct], [String(messages), SYNTAX.number], [';', SYNTAX.punct]],
+    [['const', SYNTAX.keyword], [' voiceTime', SYNTAX.name], [' = ', SYNTAX.punct], [JSON.stringify(formatDuration(voiceMs)), SYNTAX.string], [';', SYNTAX.punct]],
   ];
   lines.forEach((tokens, i) => {
     const y = 96 + i * 30;
@@ -187,7 +199,7 @@ async function renderRankCard({ username, avatarUrl, themeId, level, xp, floor, 
   const span = Math.max(1, next - floor);
   const fraction = Math.min(1, Math.max(0, (xp - floor) / span));
   const barX = 92;
-  const barY = 266;
+  const barY = 310;
   const barW = 470;
   const barH = 14;
   roundRect(ctx, barX, barY, barW, barH, 7);
@@ -238,4 +250,4 @@ async function renderRankCard({ username, avatarUrl, themeId, level, xp, floor, 
   return canvas.encode('png');
 }
 
-module.exports = { renderRankCard, THEME_CHOICES };
+module.exports = { renderRankCard, THEME_CHOICES, formatDuration };
