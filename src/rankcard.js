@@ -167,7 +167,7 @@ async function renderRankCard({ username, avatarUrl, themeId, level, xp, floor, 
 
   // Code body: a line-numbered gutter with the member's stats written as constants.
   const lines = [
-    [[`// ${theme.label} rank card`, SYNTAX.comment]],
+    [['// Scoutcode Rank Card', SYNTAX.comment]],
     [['const', SYNTAX.keyword], [' user', SYNTAX.name], [' = ', SYNTAX.punct], [JSON.stringify(shorten(username, 20)), SYNTAX.string], [';', SYNTAX.punct]],
     [['const', SYNTAX.keyword], [' level', SYNTAX.name], [' = ', SYNTAX.punct], [String(level), SYNTAX.number], [';', SYNTAX.punct]],
     [['const', SYNTAX.keyword], [' xp', SYNTAX.name], [' = ', SYNTAX.punct], [String(xp), SYNTAX.number], [';', SYNTAX.punct]],
