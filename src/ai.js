@@ -2,6 +2,7 @@ const config = require('./config');
 const store = require('./storage');
 const memory = require('./memory');
 const budget = require('./budget');
+const { SCOUTCODE, SUPPORT_FOCUS } = require('./knowledge');
 
 const MAX_HISTORY = 20; // messages kept per channel (about 10 exchanges)
 
@@ -30,6 +31,9 @@ function systemPrompt(botName, speaker, userId, guildId) {
     'Messages from users are prefixed with the speaker\'s name, like "Name: message". Never add that prefix to your own replies.',
     'Keep answers focused and under 1500 characters unless asked for more detail.',
     'If you are not sure of an answer or do not know it, say so plainly instead of guessing. Never invent facts about the user, the server or the outside world.',
+    ...SUPPORT_FOCUS,
+    'What you know about ScoutCode:',
+    ...SCOUTCODE.map((fact) => `- ${fact}`),
   ];
 
   // Server rules from administrators: always applied in this server.
@@ -73,20 +77,67 @@ async function fetchWithRetry(url, init) {
   }
 }
 
+// Tools the model can call. web_search goes through the ScoutCode server (same key as the chat).
+const TOOLS = [{
+  type: 'function',
+  function: {
+    name: 'web_search',
+    description: 'Search the web for current or external information. Use it for anything that may have changed, or that is not about ScoutCode itself. Returns titles, URLs, dates and short excerpts.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to search for, in plain words' },
+        num_results: { type: 'integer', description: '1-5, default 5' },
+      },
+      required: ['query'],
+    },
+  },
+}];
+const TOOL_LABELS = { web_search: (args) => `Browsing the internet for "${args.query ?? '…'}"…` };
+const MAX_TOOL_ROUNDS = 4;
+
+// Runs one tool call and returns the text the model reads back.
+async function runTool(name, args) {
+  if (name !== 'web_search') throw new Error(`Unknown tool ${name}`);
+  const query = String(args.query ?? '').trim();
+  if (!query) return 'No query given.';
+  const count = Math.min(5, Math.max(1, Math.trunc(Number(args.num_results) || 5)));
+  const response = await fetchWithRetry(`${config.ai.baseUrl}/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.ai.apiKey}` },
+    body: JSON.stringify({ query, num_results: count, highlights: true }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!response.ok) return `Search failed (${response.status}). Answer without it.`;
+  const data = await response.json().catch(() => ({}));
+  const results = data.results ?? [];
+  if (!results.length) return `No results for "${query}".`;
+  return results.map((r, i) => [
+    `${i + 1}. ${r.title || '(no title)'}`,
+    `   ${r.url}`,
+    r.published_date ? `   Published ${String(r.published_date).slice(0, 10)}` : null,
+    ...(r.highlights ?? []).map((h) => `   > ${String(h).split(/\s+/).join(' ')}`),
+  ].filter(Boolean).join('\n')).join('\n');
+}
+
 // Calls the chat API. MiniMax-M3.1-Flash always thinks, and its thinking counts toward the token limit.
-async function callModel(system, messages, { maxTokens = config.ai.maxTokens, effort = config.ai.reasoningEffort, model = activeModel() } = {}) {
+// With tools, the model may call them; each call is run, reported through onProgress, and sent back
+// until the model answers in text.
+async function callModel(system, messages, { maxTokens = config.ai.maxTokens, effort = config.ai.reasoningEffort, model = activeModel(), tools = null, onProgress = () => {} } = {}) {
   if (!config.ai.apiKey) {
     throw new Error('The AI is not configured. Set AI_API_KEY in the .env file.');
   }
   budget.assertAvailable();
 
-  const ask = async (modelName) => {
+  const conversationMessages = [...messages];
+  const ask = async (modelName, withTools) => {
     const payload = {
       model: modelName,
       max_completion_tokens: maxTokens,
-      messages: [{ role: 'system', content: system }, ...messages],
+      messages: [{ role: 'system', content: system }, ...conversationMessages],
     };
     if (effort) payload.reasoning_effort = effort;
+    if (withTools) payload.tools = tools;
 
     let response;
     try {
@@ -111,32 +162,57 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
     return { response, data, payload };
   };
 
-  let { response, data, payload } = await ask(model);
+  let activeModelName = model;
+  for (let round = 0; ; round++) {
+    // Once tool rounds are used up, ask for a plain answer so the loop always ends.
+    const useTools = tools && round < MAX_TOOL_ROUNDS;
+    let { response, data, payload } = await ask(activeModelName, useTools);
 
-  // 400/404 means the model itself was rejected (renamed or removed): retry once with the fallback.
-  if ((response.status === 400 || response.status === 404) && model !== config.ai.fallbackModel) {
-    ({ response, data, payload } = await ask(config.ai.fallbackModel));
-  }
-
-  if (!response.ok) {
-    const reason = data.error?.message ?? data.base_resp?.status_msg ?? response.statusText;
-    throw new Error(`AI request failed (${response.status}): ${reason}`);
-  }
-
-  // Count tokens from the API's usage report. If it is missing, estimate about 4 characters per token.
-  const replyLength = data.choices?.[0]?.message?.content?.length ?? 0;
-  budget.record(data.usage?.total_tokens ?? Math.ceil((JSON.stringify(payload).length + replyLength) / 4));
-
-  const choice = data.choices?.[0];
-  // Drop an inline <think> block if the provider puts one in the content.
-  const text = choice?.message?.content?.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-  if (!text) {
-    if (choice?.finish_reason === 'length') {
-      throw new Error('The AI ran out of room before answering. Try a shorter question.');
+    // 400/404 means the model itself was rejected (renamed or removed): retry once with the fallback.
+    if ((response.status === 400 || response.status === 404) && activeModelName !== config.ai.fallbackModel) {
+      activeModelName = config.ai.fallbackModel;
+      ({ response, data, payload } = await ask(activeModelName, useTools));
     }
-    throw new Error('The AI returned an empty answer.');
+
+    if (!response.ok) {
+      const reason = data.error?.message ?? data.base_resp?.status_msg ?? response.statusText;
+      throw new Error(`AI request failed (${response.status}): ${reason}`);
+    }
+
+    // Count tokens from the API's usage report. If it is missing, estimate about 4 characters per token.
+    const replyLength = data.choices?.[0]?.message?.content?.length ?? 0;
+    budget.record(data.usage?.total_tokens ?? Math.ceil((JSON.stringify(payload).length + replyLength) / 4));
+
+    const choice = data.choices?.[0];
+    const calls = useTools ? choice?.message?.tool_calls ?? [] : [];
+    if (calls.length) {
+      // Keep the assistant turn with its tool calls, then answer each call so the model can continue.
+      conversationMessages.push(choice.message);
+      for (const call of calls) {
+        let args = {};
+        try { args = JSON.parse(call.function?.arguments || '{}'); } catch { /* keep empty args */ }
+        onProgress(TOOL_LABELS[call.function?.name]?.(args) ?? `Running ${call.function?.name}…`);
+        let result;
+        try {
+          result = await runTool(call.function?.name, args);
+        } catch (err) {
+          result = `Tool failed: ${err.message}`;
+        }
+        conversationMessages.push({ role: 'tool', tool_call_id: call.id, content: result });
+      }
+      continue;
+    }
+
+    // Drop an inline <think> block if the provider puts one in the content.
+    const text = choice?.message?.content?.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    if (!text) {
+      if (choice?.finish_reason === 'length') {
+        throw new Error('The AI ran out of room before answering. Try a shorter question.');
+      }
+      throw new Error('The AI returned an empty answer.');
+    }
+    return text;
   }
-  return text;
 }
 
 // Turns the model's reply into fact updates: { text, replaces } where replaces is the id of an
@@ -204,7 +280,10 @@ async function chat({ channelId, guildId, botName, userId, speaker, question, on
   const history = conversation(channelId);
   const userMessage = { role: 'user', content: `${speaker}: ${question}` };
   onProgress('Thinking about your question…');
-  const answer = await callModel(systemPrompt(botName, speaker, userId, guildId), [...history, userMessage]);
+  const answer = await callModel(systemPrompt(botName, speaker, userId, guildId), [...history, userMessage], {
+    tools: TOOLS,
+    onProgress,
+  });
 
   history.push(userMessage, { role: 'assistant', content: answer });
   history.splice(0, Math.max(0, history.length - MAX_HISTORY));

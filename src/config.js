@@ -45,6 +45,10 @@ module.exports = {
   // Dedicated channel where every message is a question (no mention needed).
   aiChannelId: process.env.AI_CHANNEL_ID || '1566503029916700752',
 
+  // ScoutCode release announcements (see src/updates.js).
+  updateChannelId: process.env.UPDATE_CHANNEL_ID || '1566490353748680814',
+  changelogChannelId: process.env.CHANGELOG_CHANNEL_ID || '1566490537006202880',
+
   dataFile: path.join(__dirname, '..', 'data', 'store.json'),
   transcriptDir: path.join(__dirname, '..', 'data', 'transcripts'),
 };
