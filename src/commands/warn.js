@@ -1,4 +1,5 @@
 const {
+  MessageFlags,
   ActionRowBuilder,
   PermissionFlagsBits,
   SlashCommandBuilder,
@@ -65,7 +66,7 @@ function logWarningRemoval(interaction, userId, warningId) {
 
 async function handleUnwarnSelect(interaction) {
   if (!hasPerm(interaction, MOD_PERMISSION)) {
-    return interaction.reply({ content: NO_PERMISSION, ephemeral: true });
+    return interaction.reply({ content: NO_PERMISSION, flags: MessageFlags.Ephemeral });
   }
 
   const userId = interaction.customId.split(':')[2];
@@ -158,7 +159,7 @@ const unwarn = {
     const warningId = interaction.options.getInteger('warning_id');
 
     if (warningId === null) {
-      return interaction.reply({ ...buildWarningsView(interaction.guild.id, user.id), ephemeral: true });
+      return interaction.reply({ ...buildWarningsView(interaction.guild.id, user.id), flags: MessageFlags.Ephemeral });
     }
 
     const removed = removeWarning(interaction.guild.id, user.id, warningId);
@@ -184,7 +185,7 @@ const warnings = {
     if (!hasPerm(interaction, MOD_PERMISSION)) return fail(interaction, NO_PERMISSION);
 
     const user = interaction.options.getUser('user', true);
-    return interaction.reply({ ...buildWarningsView(interaction.guild.id, user.id), ephemeral: true });
+    return interaction.reply({ ...buildWarningsView(interaction.guild.id, user.id), flags: MessageFlags.Ephemeral });
   },
 };
 

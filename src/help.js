@@ -1,4 +1,4 @@
-const { ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
+const { MessageFlags, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } = require('discord.js');
 const { isBotOwner, makeEmbed } = require('./utils');
 
 // Each category lists the commands it shows. Anything not listed here appears under "Other", so new commands are never hidden.
@@ -109,7 +109,7 @@ function helpPayload(commands, isOwner) {
     'Pick a category in the menu to see its commands.\n\n' +
       categories.map((c) => `${c.emoji} **${c.label}**: ${c.description}`).join('\n'),
   );
-  return { embeds: [overview], components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true };
+  return { embeds: [overview], components: [new ActionRowBuilder().addComponents(menu)], flags: MessageFlags.Ephemeral };
 }
 
 // Called when someone picks a category. Edits the same message so the menu stays usable.

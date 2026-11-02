@@ -1,4 +1,4 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const store = require('./storage');
 const { makeEmbed, sendLog } = require('./utils');
 
@@ -89,7 +89,7 @@ async function joinGiveaway(interaction) {
   const id = Number(interaction.customId.split(':')[2]);
   const g = findGiveaway(interaction.guild.id, id);
   if (!g || g.ended) {
-    return interaction.reply({ content: 'This giveaway has ended.', ephemeral: true });
+    return interaction.reply({ content: 'This giveaway has ended.', flags: MessageFlags.Ephemeral });
   }
 
   const userId = interaction.user.id;
@@ -100,7 +100,7 @@ async function joinGiveaway(interaction) {
   await interaction.update(render(g, false));
   return interaction.followUp({
     content: joined ? `You are in! Good luck. (${g.entries.length} entries)` : 'You left the giveaway.',
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 

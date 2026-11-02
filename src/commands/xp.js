@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const { levelsConfig, progressOf, setXp, totalXp } = require('../levels');
 const { fail, hasPerm, makeEmbed } = require('../utils');
 
@@ -74,7 +74,7 @@ module.exports = {
         ),
       ],
       allowedMentions: { parse: [] },
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   },
 };

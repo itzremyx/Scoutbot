@@ -1,4 +1,4 @@
-const { Client, Events, GatewayIntentBits, Partials } = require('discord.js');
+const { MessageFlags, Client, Events, GatewayIntentBits, Partials } = require('discord.js');
 const config = require('./src/config');
 const loader = require('./src/loader');
 const logs = require('./src/logs');
@@ -58,7 +58,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const command = loader.findCommand(interaction.commandName);
       if (!command) return;
       if (command.guildOnly && !interaction.guild) {
-        return interaction.reply({ content: 'This command only works in a server.', ephemeral: true });
+        return interaction.reply({ content: 'This command only works in a server.', flags: MessageFlags.Ephemeral });
       }
       if (command.ownerOnly && !(await isBotOwner(client, interaction.user.id))) {
         return fail(interaction, 'Only the bot owner can use this command.');

@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const store = require('../storage');
 const { fail, hasPerm, makeEmbed, sendLog } = require('../utils');
 
@@ -28,7 +28,7 @@ const purge = {
 
     const amount = interaction.options.getInteger('amount', true);
     const user = interaction.options.getUser('user');
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     // bulkDelete ignores messages older than 14 days, and only deletes what it fetched.
     const fetched = await interaction.channel.messages.fetch({ limit: MAX_PURGE });

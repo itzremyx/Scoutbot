@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const { claimTicket, closeTicket, createTicket, findOpenTicket, TICKET_TYPES } = require('./tickets');
 const { handleUnwarnSelect } = require('./commands/warn');
 const { handleUnbanSelect } = require('./commands/moderation');
@@ -7,7 +8,7 @@ const { makeEmbed, sendLog } = require('./utils');
 
 async function handleTicketSelect(interaction) {
   const type = interaction.values[0];
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const existing = await findOpenTicket(interaction.guild, interaction.user.id);
   if (existing) {

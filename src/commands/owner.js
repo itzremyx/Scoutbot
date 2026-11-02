@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, SlashCommandBuilder } = require('discord.js');
 const budget = require('../budget');
 const config = require('../config');
 const loader = require('../loader');
@@ -51,7 +51,7 @@ const botstats = {
       if (cooldown !== null) budget.setCooldown(cooldown);
       if (paused !== null) budget.setPaused(paused);
       if (reset) budget.resetToday();
-      return interaction.reply({ embeds: [aiEmbed('AI budget updated')], ephemeral: true });
+      return interaction.reply({ embeds: [aiEmbed('AI budget updated')], flags: MessageFlags.Ephemeral });
     }
 
     const mem = process.memoryUsage();
@@ -64,7 +64,7 @@ const botstats = {
         { name: 'Node', value: process.version, inline: true },
         { name: 'Commands', value: String(loader.commandCount()), inline: true },
       );
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };
 
@@ -91,7 +91,7 @@ const botreload = {
     .setDescription('Reload command files without restarting the bot (bot owner only)'),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       const count = await loader.reload(interaction.client);
       return interaction.editReply({

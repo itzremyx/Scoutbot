@@ -1,4 +1,4 @@
-const { EmbedBuilder, Team } = require('discord.js');
+const { MessageFlags, EmbedBuilder, Team } = require('discord.js');
 const store = require('./storage');
 
 const COLORS = { info: 0x5865f2, success: 0x57f287, warn: 0xfee75c, error: 0xed4245 };
@@ -34,7 +34,7 @@ function fail(interaction, message) {
   if (interaction.deferred || interaction.replied) {
     return interaction.editReply({ embeds: [embed], components: [] });
   }
-  return interaction.reply({ embeds: [embed], ephemeral: true });
+  return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
 function hasPerm(interaction, flag) {

@@ -1,4 +1,4 @@
-const { ChannelType, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, ChannelType, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const store = require('../storage');
 const { CATEGORIES, logConfig } = require('../logs');
 const { fail, hasPerm, makeEmbed } = require('../utils');
@@ -49,7 +49,7 @@ module.exports = {
         embeds: [
           makeEmbed('success', 'Log category updated', `${CATEGORIES[category]} logs are now **${wasOff ? 'on' : 'off'}**.`),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -68,7 +68,7 @@ module.exports = {
             `Messages in ${channel} are now **${wasIgnored ? 'logged' : 'ignored'}**.`,
           ),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -85,7 +85,7 @@ module.exports = {
           `**Channel:** ${channel}\n\n**Categories**\n${categories}\n\n**Ignored channels:** ${ignored}`,
         ),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   },
 };

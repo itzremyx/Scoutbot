@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const store = require('../storage');
 const { levelsConfig } = require('../levels');
 const { THEME_CHOICES } = require('../rankcard');
@@ -54,6 +54,6 @@ module.exports = {
       `**Members with XP:** ${Object.keys(cfg.users).length}`,
       `**Level-up messages** are deleted after 2 minutes.`,
     ].join('\n');
-    return interaction.reply({ embeds: [makeEmbed('info', 'Levels', text)], ephemeral: true });
+    return interaction.reply({ embeds: [makeEmbed('info', 'Levels', text)], flags: MessageFlags.Ephemeral });
   },
 };

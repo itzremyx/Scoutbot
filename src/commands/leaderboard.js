@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, SlashCommandBuilder } = require('discord.js');
 const { levelsConfig, progressOf, rankOf } = require('../levels');
 const { makeEmbed } = require('../utils');
 
@@ -13,7 +13,7 @@ module.exports = {
       .sort(([, a], [, b]) => b.xp - a.xp)
       .slice(0, 10);
     if (!top.length) {
-      return interaction.reply({ embeds: [makeEmbed('info', 'Leaderboard', 'Nobody has XP yet.')], ephemeral: true });
+      return interaction.reply({ embeds: [makeEmbed('info', 'Leaderboard', 'Nobody has XP yet.')], flags: MessageFlags.Ephemeral });
     }
 
     const lines = top.map(([id, user], i) => {

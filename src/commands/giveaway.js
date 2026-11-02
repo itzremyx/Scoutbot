@@ -1,4 +1,4 @@
-const { ChannelType, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, ChannelType, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const { endGiveaway, findGiveaway, giveawayConfig, parseDuration, rerollGiveaway, startGiveaway } = require('../giveaways');
 const { fail, hasPerm, makeEmbed } = require('../utils');
 
@@ -64,7 +64,7 @@ module.exports = {
       });
       return interaction.reply({
         embeds: [makeEmbed('success', 'Giveaway started', `Giveaway #${g.id} is live in <#${channel.id}>.`)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -75,7 +75,7 @@ module.exports = {
             .map((g) => `**#${g.id}** ${g.prize}: ${g.entries.length} entries, ends <t:${Math.floor(g.endsAt / 1000)}:R>`)
             .join('\n')
         : 'No giveaway is running.';
-      return interaction.reply({ embeds: [makeEmbed('info', 'Running giveaways', text)], ephemeral: true });
+      return interaction.reply({ embeds: [makeEmbed('info', 'Running giveaways', text)], flags: MessageFlags.Ephemeral });
     }
 
     const id = interaction.options.getInteger('id', true);
@@ -84,7 +84,7 @@ module.exports = {
 
     if (sub === 'end') {
       if (g.ended) return fail(interaction, `Giveaway #${id} has already ended.`);
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
       await endGiveaway(interaction.guild, g);
       return interaction.editReply({ embeds: [makeEmbed('success', 'Giveaway ended', `Giveaway #${id} is over.`)] });
     }
@@ -92,7 +92,7 @@ module.exports = {
     // reroll
     if (!g.ended) return fail(interaction, `Giveaway #${id} is still running. Use \`/giveaway end\` first.`);
     if (!g.entries.length) return fail(interaction, `Giveaway #${id} has no entries to pick from.`);
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const winners = await rerollGiveaway(interaction.guild, g);
     return interaction.editReply({
       embeds: [

@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const { createBackup, deleteBackup, findBackup, listBackups, restoreBackup, MAX_BACKUPS } = require('../backups');
 const { fail, hasPerm, makeEmbed } = require('../utils');
 
@@ -52,7 +52,7 @@ module.exports = {
             `**#${backup.id}:** ${backup.name}\n**Roles:** ${backup.roles.length}\n**Channels:** ${backup.channels.length}`,
           ),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
@@ -63,7 +63,7 @@ module.exports = {
             .map((b) => `**#${b.id}** ${b.name}: ${b.roles.length} roles, ${b.channels.length} channels (<t:${Math.floor(b.createdAt / 1000)}:R>)`)
             .join('\n')
         : 'No backup yet. Use `/backup create`.';
-      return interaction.reply({ embeds: [makeEmbed('info', 'Backups', text)], ephemeral: true });
+      return interaction.reply({ embeds: [makeEmbed('info', 'Backups', text)], flags: MessageFlags.Ephemeral });
     }
 
     const id = interaction.options.getInteger('id', true);
@@ -72,11 +72,11 @@ module.exports = {
 
     if (sub === 'delete') {
       deleteBackup(guild.id, id);
-      return interaction.reply({ embeds: [makeEmbed('success', 'Backup deleted', `Backup #${id} was deleted.`)], ephemeral: true });
+      return interaction.reply({ embeds: [makeEmbed('success', 'Backup deleted', `Backup #${id} was deleted.`)], flags: MessageFlags.Ephemeral });
     }
 
     // restore
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const report = await restoreBackup(guild, backup);
     return interaction.editReply({
       embeds: [

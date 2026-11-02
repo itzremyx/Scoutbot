@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const config = require('../config');
 const store = require('../storage');
 const ai = require('../ai');
@@ -28,7 +28,7 @@ module.exports = {
     if (sub === 'view') {
       return interaction.reply({
         embeds: [makeEmbed('info', 'Current personality', truncate(ai.getPersonality(), 4000))],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 

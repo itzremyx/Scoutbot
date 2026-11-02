@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const ai = require('../ai');
 const memory = require('../memory');
 const { fail, hasPerm, makeEmbed, truncate } = require('../utils');
@@ -84,7 +84,7 @@ module.exports = {
           : 'No server rules yet. Admins can add one with `/memory server-add`.';
         return interaction.reply({
           embeds: [makeEmbed('info', 'Server rules', truncate(body, 4000))],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -105,7 +105,7 @@ module.exports = {
           : 'Nothing is waiting for approval.';
         return interaction.reply({
           embeds: [makeEmbed('info', 'Pending memories', truncate(body, 4000))],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
 
@@ -116,7 +116,7 @@ module.exports = {
         const text = ok
           ? `${sub === 'approve' ? 'Approved' : 'Rejected'} pending #${id}.`
           : `No pending item #${id}.`;
-        return interaction.reply({ embeds: [makeEmbed(ok ? 'success' : 'error', 'Pending memories', text)], ephemeral: true });
+        return interaction.reply({ embeds: [makeEmbed(ok ? 'success' : 'error', 'Pending memories', text)], flags: MessageFlags.Ephemeral });
       }
 
       if (sub === 'server-add') {
@@ -141,35 +141,35 @@ module.exports = {
         : 'I don’t remember anything about you yet. Chat with me or use `/memory add`.';
       return interaction.reply({
         embeds: [makeEmbed('info', 'What I remember about you', truncate(body, 4000))],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     if (sub === 'add') {
       const fact = memory.addFact(userId, interaction.options.getString('fact', true));
       const text = fact ? `Got it, I'll remember: ${fact.text}` : 'I already know that, or the text was empty.';
-      return interaction.reply({ embeds: [makeEmbed(fact ? 'success' : 'info', 'Memory', text)], ephemeral: true });
+      return interaction.reply({ embeds: [makeEmbed(fact ? 'success' : 'info', 'Memory', text)], flags: MessageFlags.Ephemeral });
     }
 
     if (sub === 'forget') {
       const id = interaction.options.getInteger('id', true);
       const removed = memory.removeFact(userId, id);
       const text = removed ? `Forgot fact #${id}.` : `You have no fact #${id}.`;
-      return interaction.reply({ embeds: [makeEmbed(removed ? 'success' : 'error', 'Memory', text)], ephemeral: true });
+      return interaction.reply({ embeds: [makeEmbed(removed ? 'success' : 'error', 'Memory', text)], flags: MessageFlags.Ephemeral });
     }
 
     if (sub === 'clear') {
       memory.clearFacts(userId);
       return interaction.reply({
         embeds: [makeEmbed('success', 'Memory cleared', 'I have forgotten everything about you.')],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     ai.resetConversation(interaction.channelId);
     return interaction.reply({
       embeds: [makeEmbed('success', 'Chat reset', 'I cleared my recent chat history for this channel.')],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
   },
 };

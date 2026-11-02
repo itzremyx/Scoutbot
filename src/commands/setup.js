@@ -1,4 +1,4 @@
-const { ChannelType, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
+const { MessageFlags, ChannelType, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const store = require('../storage');
 const { buildPanel } = require('../tickets');
 const { fail, hasPerm, makeEmbed } = require('../utils');
@@ -37,11 +37,11 @@ module.exports = {
       store.save();
       return interaction.reply({
         embeds: [makeEmbed('success', 'Log channel set', `Logs will be posted in ${channel}.`)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
     await interaction.channel.send(buildPanel(interaction.guild));
-    return interaction.reply({ embeds: [makeEmbed('success', 'Ticket panel posted', 'The panel is live.')], ephemeral: true });
+    return interaction.reply({ embeds: [makeEmbed('success', 'Ticket panel posted', 'The panel is live.')], flags: MessageFlags.Ephemeral });
   },
 };

@@ -1,4 +1,5 @@
 const {
+  MessageFlags,
   ActionRowBuilder,
   PermissionFlagsBits,
   SlashCommandBuilder,
@@ -41,7 +42,7 @@ function logModeration(interaction, title, userId, reason, extra = '') {
 
 async function handleUnbanSelect(interaction) {
   if (!hasPerm(interaction, PermissionFlagsBits.BanMembers)) {
-    return interaction.reply({ content: 'You need the Ban Members permission to do this.', ephemeral: true });
+    return interaction.reply({ content: 'You need the Ban Members permission to do this.', flags: MessageFlags.Ephemeral });
   }
 
   const userId = interaction.values[0];
@@ -172,7 +173,7 @@ module.exports = {
       return interaction.reply({
         content: 'Select a user to unban:',
         components: [new ActionRowBuilder().addComponents(menu)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     },
   },
