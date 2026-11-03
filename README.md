@@ -12,10 +12,10 @@ node index.js
 
 Only `DISCORD_TOKEN` and `AI_*` settings belong in `.env`; it is gitignored and never uploaded.
 
-The bot can read image attachments in normal chat and with `/ask image`. `/imagine` defaults to
-`openai/gpt-5-image-mini` through OpenRouter, so set `AI_IMAGE_API_KEY` to an OpenRouter key
-before using image generation. The image endpoint can be changed with `AI_IMAGE_BASE_URL` and
-`AI_IMAGE_ENDPOINT` for another compatible provider.
+The bot can read image attachments in normal chat and with `/ask image`. `/imagine` uses
+ScoutCode's `openai-gpt-5-image` through `https://scoutcode.dev/v1/images/generations` and
+reuses `AI_API_KEY` by default. `AI_IMAGE_BASE_URL`, `AI_IMAGE_ENDPOINT` and `AI_IMAGE_API_KEY`
+can override those defaults for another compatible provider.
 
 ## Sending changes to GitHub
 

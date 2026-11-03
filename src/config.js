@@ -9,8 +9,8 @@ const envNumber = (name, fallback) => {
   return raw && Number.isFinite(value) ? value : fallback;
 };
 
-const chatBaseUrl = (process.env.AI_BASE_URL || 'https://api.minimax.io/v1').replace(/\/+$/, '');
-const imageBaseUrl = (process.env.AI_IMAGE_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+const chatBaseUrl = (process.env.AI_BASE_URL || 'https://scoutcode.dev/v1').replace(/\/+$/, '');
+const imageBaseUrl = (process.env.AI_IMAGE_BASE_URL || chatBaseUrl).replace(/\/+$/, '');
 
 module.exports = {
   token: process.env.DISCORD_TOKEN,
@@ -33,17 +33,12 @@ module.exports = {
     maxTokens: 2048,
     // Reasoning models (MiniMax, DeepSeek) think before answering; 60s was too short and cut answers off.
     timeoutMs: 180_000,
-    // /imagine: GPT-5 Image Mini through an OpenRouter-compatible Image API by default.
-    // A separate endpoint/key is supported because the chat proxy may not expose image generation.
-    imageModel: process.env.AI_IMAGE_MODEL || 'openai/gpt-5-image-mini',
+    // /imagine: ScoutCode's GPT-5 Image endpoint by default.
+    imageModel: process.env.AI_IMAGE_MODEL || 'openai-gpt-5-image',
     imageBaseUrl,
-    imageEndpoint: process.env.AI_IMAGE_ENDPOINT || '/images',
-    // Reuse the chat key only when both services use the same endpoint. OpenRouter needs its own key.
-    imageApiKey: process.env.AI_IMAGE_API_KEY || (
-      imageBaseUrl === chatBaseUrl
-        ? process.env.AI_API_KEY
-        : undefined
-    ),
+    imageEndpoint: process.env.AI_IMAGE_ENDPOINT || '/images/generations',
+    // ScoutCode uses the same API key for chat and image generation by default.
+    imageApiKey: process.env.AI_IMAGE_API_KEY || process.env.AI_API_KEY,
     imageDailyLimit: envNumber('AI_IMAGE_DAILY_LIMIT', 50),
     imageTimeoutMs: 120_000,
     // Budget: total tokens per UTC day, and seconds a user must wait between AI requests.

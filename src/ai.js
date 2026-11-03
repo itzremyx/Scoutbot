@@ -413,8 +413,7 @@ async function chat({ channelId, guildId, botName, userId, speaker, question, im
   return answer;
 }
 
-// Generates images from a text prompt. Uses its own daily cap and endpoint/key (the chat
-// endpoint may not expose /image_generation).
+// Generates images from a text prompt. Uses its own daily cap and the ScoutCode image endpoint.
 // Returns { images: Buffer[], failed } where failed is the count blocked by content safety.
 async function generateImages({ userId, prompt, ratio, count = 1 }) {
   if (!config.ai.imageApiKey) {
@@ -428,7 +427,7 @@ async function generateImages({ userId, prompt, ratio, count = 1 }) {
     throw new Error(`Only ${budget.imagesLeft()} image(s) left today. Try fewer images.`);
   }
 
-  const isImageApi = config.ai.imageEndpoint === '/images' || config.ai.imageEndpoint.endsWith('/images');
+  const isImageApi = /\/images(?:\/generations)?$/.test(config.ai.imageEndpoint);
   const payload = isImageApi
     ? {
       model: config.ai.imageModel,
