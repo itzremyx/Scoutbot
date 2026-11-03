@@ -74,7 +74,9 @@ function aiEmbed(title) {
   const limit = Number.isFinite(s.limit) ? s.limit.toLocaleString('en-US') : 'unlimited';
   const imageLimit = Number.isFinite(s.imageLimit) ? s.imageLimit.toLocaleString('en-US') : 'unlimited';
   return makeEmbed('info', title, null).addFields(
-    { name: 'Model', value: `\`${ai.activeModel()}\` (fallback: \`${config.ai.fallbackModel}\`)`, inline: true },
+    { name: 'Configured model', value: `\`${ai.activeModel()}\``, inline: true },
+    { name: 'Last provider model', value: ai.lastModel() ? `\`${ai.lastModel()}\`` : 'Not used yet', inline: true },
+    { name: 'Fallback', value: `\`${config.ai.fallbackModel}\``, inline: true },
     { name: 'Status', value: s.paused ? '⏸️ Paused' : '▶️ Active', inline: true },
     { name: 'Cooldown', value: `${s.cooldownSeconds}s per user`, inline: true },
     { name: 'Daily limit', value: limit, inline: true },

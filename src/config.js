@@ -20,10 +20,10 @@ module.exports = {
   ai: {
     apiKey: process.env.AI_API_KEY,
     baseUrl: (process.env.AI_BASE_URL || 'https://api.minimax.io/v1').replace(/\/+$/, ''),
-    model: process.env.AI_MODEL || 'MiniMax-M3.1-Flash',
+    model: process.env.AI_MODEL || 'minimax-m3.1-flash',
     // Tried automatically whenever the primary model fails for any reason (rejected model,
     // timeout, rate limit, outage). Same endpoint and API key; never on 401/403 (bad key).
-    fallbackModel: process.env.AI_MODEL_FALLBACK || 'MiniMax-M3.1-Flash',
+    fallbackModel: process.env.AI_MODEL_FALLBACK || 'minimax-m3.1-flash',
     // low | medium | high | xhigh | max. Empty string disables it (only MiniMax-M3.1-Flash accepts it).
     reasoningEffort: process.env.AI_REASONING_EFFORT ?? 'medium',
     // Thinking tokens count toward this limit, so keep it well above the answer length.

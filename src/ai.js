@@ -53,8 +53,21 @@ function systemPrompt(botName, speaker, userId, guildId) {
 }
 
 // Model in use: /botstats ai model overrides AI_MODEL from the .env file, and it survives restarts.
+let lastProviderModel = null;
+
 function activeModel() {
   return store.data.settings.aiModel || config.ai.model;
+}
+
+function lastModel() {
+  return lastProviderModel;
+}
+
+function providerModelMatches(requested, actual) {
+  if (!actual || typeof actual !== 'string') return true;
+  const wanted = requested.toLowerCase();
+  const received = actual.toLowerCase();
+  return received === wanted || received.endsWith('/' + wanted);
 }
 
 // fetch reports connection problems as TypeError("fetch failed") and hides the real reason in
@@ -188,6 +201,7 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
       throw err;
     }
     const data = await response.json().catch(() => ({}));
+    if (data.model) lastProviderModel = data.model;
     return { response, data, payload };
   };
 
@@ -215,6 +229,16 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
       if (!result.response.ok && !fallbackUsed && canSwitch(result.response.status)) {
         useFallback(`HTTP ${result.response.status}`);
         return await ask(activeModelName, withTools, toolChoice);
+      }
+      // Some proxy routes return HTTP 200 while silently executing a different model.
+      // Never present the requested model as active when the provider tells us otherwise.
+      if (result.response.ok && result.data.model && !providerModelMatches(activeModelName, result.data.model)) {
+        const routedTo = result.data.model;
+        if (!fallbackUsed) {
+          useFallback(`API routed ${activeModelName} to ${routedTo}`);
+          return await ask(activeModelName, withTools, toolChoice);
+        }
+        throw new Error(`The AI API routed the fallback to ${routedTo} instead of ${activeModelName}.`);
       }
       return result;
     } catch (err) {
@@ -451,4 +475,4 @@ function resetConversation(channelId) {
   store.save();
 }
 
-module.exports = { chat, generateImages, extractInstruction, activeModel, getPersonality, parseFacts, isToolMention, mentionedToolNames, resetConversation };
+module.exports = { chat, generateImages, extractInstruction, activeModel, lastModel, getPersonality, parseFacts, isToolMention, mentionedToolNames, resetConversation };
