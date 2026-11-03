@@ -48,6 +48,15 @@ async function questionOf(message, client) {
   return content.trim();
 }
 
+// Discord exposes attachment URLs directly; only pass image attachments to the vision model.
+function imageUrlsOf(message) {
+  return [...(message.attachments?.values?.() ?? [])]
+    .filter((attachment) => attachment.contentType?.startsWith('image/') || /\.(?:png|jpe?g|gif|webp|bmp|avif)(?:\?|$)/i.test(attachment.url ?? ''))
+    .map((attachment) => attachment.url)
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 // Message handler for chat replies: mentions, replies and AI channel in servers, plain conversation in DMs.
 function register(client) {
   client.on(Events.MessageCreate, async (message) => {
@@ -55,14 +64,15 @@ function register(client) {
     const isDM = !message.guild;
     const question = await questionOf(message, client);
     if (question === null) return;
+    const imageUrls = imageUrlsOf(message);
 
-    if (!question) {
-      const hint = message.attachments.size
-        ? 'I can only read text for now. Send your question as text.'
-        : 'Yes? Ask me something.';
+    if (!question && !imageUrls.length) {
+      const hint = 'Yes? Ask me something or attach an image.';
       await (isDM ? message.channel.send(hint) : message.reply(hint)).catch(() => {});
       return;
     }
+
+    const prompt = question || 'Please analyze the attached image(s) and describe what you see.';
 
     if (await captureInstruction(message, question).catch(() => false)) return;
 
@@ -96,7 +106,8 @@ function register(client) {
         botName: client.user.username,
         userId: message.author.id,
         speaker: message.author.username,
-        question,
+        question: prompt,
+        imageUrls,
         onProgress: progress,
       });
       await shownReady;
@@ -119,4 +130,4 @@ function register(client) {
   });
 }
 
-module.exports = { register, questionOf };
+module.exports = { register, questionOf, imageUrlsOf };

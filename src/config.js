@@ -9,6 +9,9 @@ const envNumber = (name, fallback) => {
   return raw && Number.isFinite(value) ? value : fallback;
 };
 
+const chatBaseUrl = (process.env.AI_BASE_URL || 'https://api.minimax.io/v1').replace(/\/+$/, '');
+const imageBaseUrl = (process.env.AI_IMAGE_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+
 module.exports = {
   token: process.env.DISCORD_TOKEN,
 
@@ -19,7 +22,7 @@ module.exports = {
 
   ai: {
     apiKey: process.env.AI_API_KEY,
-    baseUrl: (process.env.AI_BASE_URL || 'https://api.minimax.io/v1').replace(/\/+$/, ''),
+    baseUrl: chatBaseUrl,
     model: process.env.AI_MODEL || 'minimax-m3.1-flash',
     // Tried automatically whenever the primary model fails for any reason (rejected model,
     // timeout, rate limit, outage). Same endpoint and API key; never on 401/403 (bad key).
@@ -30,12 +33,17 @@ module.exports = {
     maxTokens: 2048,
     // Reasoning models (MiniMax, DeepSeek) think before answering; 60s was too short and cut answers off.
     timeoutMs: 180_000,
-    // /imagine: model, daily call cap (one image per call), and a slower timeout.
-    // Separate endpoint/key, because the chat proxy may not expose /image_generation.
-    // Empty values fall back to the chat endpoint/key above.
-    imageModel: process.env.AI_IMAGE_MODEL || 'image-01',
-    imageBaseUrl: (process.env.AI_IMAGE_BASE_URL || process.env.AI_BASE_URL || 'https://api.minimax.io/v1').replace(/\/+$/, ''),
-    imageApiKey: process.env.AI_IMAGE_API_KEY || process.env.AI_API_KEY,
+    // /imagine: GPT-5 Image Mini through an OpenRouter-compatible Image API by default.
+    // A separate endpoint/key is supported because the chat proxy may not expose image generation.
+    imageModel: process.env.AI_IMAGE_MODEL || 'openai/gpt-5-image-mini',
+    imageBaseUrl,
+    imageEndpoint: process.env.AI_IMAGE_ENDPOINT || '/images',
+    // Reuse the chat key only when both services use the same endpoint. OpenRouter needs its own key.
+    imageApiKey: process.env.AI_IMAGE_API_KEY || (
+      imageBaseUrl === chatBaseUrl
+        ? process.env.AI_API_KEY
+        : undefined
+    ),
     imageDailyLimit: envNumber('AI_IMAGE_DAILY_LIMIT', 50),
     imageTimeoutMs: 120_000,
     // Budget: total tokens per UTC day, and seconds a user must wait between AI requests.

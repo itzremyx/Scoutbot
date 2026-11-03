@@ -3,8 +3,8 @@ const ai = require('../ai');
 const budget = require('../budget');
 const { fail, truncate } = require('../utils');
 
-// The ratios the MiniMax image API accepts.
-const RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9'];
+// GPT-5 Image Mini's Image API supports these aspect ratios directly.
+const RATIOS = ['1:1', '3:2', '2:3', 'auto'];
 
 module.exports = {
   data: new SlashCommandBuilder()

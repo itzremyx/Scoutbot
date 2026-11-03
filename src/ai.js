@@ -70,6 +70,16 @@ function providerModelMatches(requested, actual) {
   return received === wanted || received.endsWith('/' + wanted);
 }
 
+// OpenAI-compatible vision messages use a text block followed by one block per image URL.
+function multimodalContent(text, imageUrls = []) {
+  const urls = [...new Set((imageUrls ?? []).filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url)))].slice(0, 4);
+  if (!urls.length) return text;
+  return [
+    { type: 'text', text: String(text || 'Please analyze the attached image(s).') },
+    ...urls.map((url) => ({ type: 'image_url', image_url: { url } })),
+  ];
+}
+
 // fetch reports connection problems as TypeError("fetch failed") and hides the real reason in
 // cause. Returns a user-facing message, or null when this is not a connection problem.
 function connectionProblem(err) {
@@ -380,16 +390,21 @@ async function learnFromExchange(guildId, userId, speaker, question, answer) {
 
 // Answers one question, using the channel's saved chat history and what the bot knows about the user.
 // onProgress(text) is called before each step so the caller can show what the bot is doing.
-async function chat({ channelId, guildId, botName, userId, speaker, question, onProgress = () => {} }) {
+async function chat({ channelId, guildId, botName, userId, speaker, question, imageUrls = [], onProgress = () => {} }) {
   budget.checkCooldown(userId);
   const history = conversation(channelId);
-  const userMessage = { role: 'user', content: `${speaker}: ${question}` };
+  const userMessage = { role: 'user', content: multimodalContent(`${speaker}: ${question}`, imageUrls) };
+  const historyMessage = {
+    role: 'user',
+    content: `${speaker}: ${question}${imageUrls.length ? '\n[Image attached]' : ''}`,
+  };
   const answer = await callModel(systemPrompt(botName, speaker, userId, guildId), [...history, userMessage], {
     tools: TOOLS,
     onProgress,
   });
 
-  history.push(userMessage, { role: 'assistant', content: answer });
+  // Keep image URLs out of store.json: Discord CDN links can expire and should not be persisted.
+  history.push(historyMessage, { role: 'assistant', content: answer });
   history.splice(0, Math.max(0, history.length - MAX_HISTORY));
   while (history[0]?.role === 'assistant') history.shift(); // history must start with a user message
   store.save();
@@ -413,18 +428,30 @@ async function generateImages({ userId, prompt, ratio, count = 1 }) {
     throw new Error(`Only ${budget.imagesLeft()} image(s) left today. Try fewer images.`);
   }
 
-  const payload = {
-    model: config.ai.imageModel,
-    prompt: prompt.slice(0, 1500), // the API rejects longer prompts
-    aspect_ratio: ratio,
-    response_format: 'base64', // urls expire after 24h; base64 is sent straight to Discord
-    n,
-    prompt_optimizer: true,
-  };
+  const isImageApi = config.ai.imageEndpoint === '/images' || config.ai.imageEndpoint.endsWith('/images');
+  const payload = isImageApi
+    ? {
+      model: config.ai.imageModel,
+      prompt: prompt.slice(0, 1500),
+      aspect_ratio: ratio === '16:9' || ratio === '4:3' || ratio === '21:9' ? '3:2' : ratio === '9:16' || ratio === '3:4' ? '2:3' : ratio,
+      quality: 'auto',
+      n,
+    }
+    : {
+      model: config.ai.imageModel,
+      prompt: prompt.slice(0, 1500), // the API rejects longer prompts
+      aspect_ratio: ratio,
+      response_format: 'base64', // urls expire after 24h; base64 is sent straight to Discord
+      n,
+      prompt_optimizer: true,
+    };
 
   let response;
   try {
-    response = await fetchWithRetry(`${config.ai.imageBaseUrl}/image_generation`, {
+    const endpoint = config.ai.imageEndpoint.startsWith('/')
+      ? `${config.ai.imageBaseUrl}${config.ai.imageEndpoint}`
+      : config.ai.imageEndpoint;
+    response = await fetchWithRetry(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -449,16 +476,28 @@ async function generateImages({ userId, prompt, ratio, count = 1 }) {
     if (status === 1026) throw new Error('Content safety blocked that prompt. Try a different one.');
     if (status === 1008) throw new Error('The account has insufficient balance for image generation.');
     if (response.status === 404) {
-      throw new Error(`No image endpoint at ${config.ai.imageBaseUrl}/image_generation (404). Check AI_IMAGE_BASE_URL in the .env file.`);
+      throw new Error(`No image endpoint at ${config.ai.imageBaseUrl}${config.ai.imageEndpoint} (404). Check AI_IMAGE_BASE_URL and AI_IMAGE_ENDPOINT in the .env file.`);
     }
     throw new Error(`Image generation failed (${status ?? response.status}): ${reason}`);
   }
 
   budget.recordImages(n);
 
-  const images = (data.data?.image_base64 ?? [])
-    .map((b64) => Buffer.from(b64, 'base64'))
-    .filter((buffer) => buffer.length > 0);
+  const imageValues = isImageApi
+    ? (Array.isArray(data.data) ? data.data.map((item) => item?.b64_json ?? item?.image_base64 ?? item?.url) : [])
+    : (data.data?.image_base64 ?? []);
+  const images = [];
+  for (const value of imageValues) {
+    if (typeof value !== 'string' || !value) continue;
+    if (/^https?:\/\//i.test(value)) {
+      const imageResponse = await fetchWithRetry(value, { signal: AbortSignal.timeout(config.ai.imageTimeoutMs) }).catch(() => null);
+      if (imageResponse?.ok) images.push(Buffer.from(await imageResponse.arrayBuffer()));
+      continue;
+    }
+    const base64 = value.startsWith('data:') ? value.split(',', 2)[1] : value;
+    const buffer = Buffer.from(base64, 'base64');
+    if (buffer.length) images.push(buffer);
+  }
   const failed = Number(data.metadata?.failed_count ?? 0) || 0;
   if (!images.length) {
     throw new Error(
@@ -475,4 +514,4 @@ function resetConversation(channelId) {
   store.save();
 }
 
-module.exports = { chat, generateImages, extractInstruction, activeModel, lastModel, getPersonality, parseFacts, isToolMention, mentionedToolNames, resetConversation };
+module.exports = { chat, generateImages, extractInstruction, activeModel, lastModel, getPersonality, parseFacts, isToolMention, mentionedToolNames, multimodalContent, resetConversation };

@@ -5,7 +5,7 @@ const { renderRankCard } = require('./rankcard');
 const XP_MIN = 15;
 const XP_MAX = 25;
 const COOLDOWN_MS = 60_000;
-const DELETE_AFTER_MS = 2 * 60_000;
+const DELETE_AFTER_MS = 10_000;
 const CHECK_EVERY_MS = 5_000;
 
 const lastXpAt = new Map(); // `${guildId}:${userId}` -> timestamp, only used to rate-limit XP
@@ -70,7 +70,7 @@ async function cardFor(user, guildId) {
 }
 
 // The level-up card is announced in any text channel (the member's chat, or the system channel
-// when the level came from voice) and deleted by the scheduler after 2 minutes.
+// when the level came from voice) and deleted by the scheduler after 10 seconds.
 async function announceLevelUp(channel, user, level, cfg, guildId) {
   const png = await cardFor(user, guildId);
   const file = new AttachmentBuilder(png, { name: 'level-up.png' });
@@ -170,7 +170,7 @@ async function creditVoice(client, now = Date.now()) {
   }
 }
 
-// Deletes level-up messages whose 2 minutes are over, including ones that were due while the bot
+// Deletes level-up messages whose 10 seconds are over, including ones that were due while the bot
 // was offline, and credits voice XP on the same 5s beat.
 function startScheduler(client) {
   const sweep = async () => {
@@ -209,6 +209,7 @@ module.exports = {
   setXp,
   cardFor,
   announceLevelUp,
+  DELETE_AFTER_MS,
   creditVoice,
   register,
   startScheduler,
