@@ -28,7 +28,7 @@ module.exports = {
     reasoningEffort: process.env.AI_REASONING_EFFORT ?? 'medium',
     // Thinking tokens count toward this limit, so keep it well above the answer length.
     maxTokens: 2048,
-    // gpt-6-luna thinks before answering; 60s was too short and cut long answers off.
+    // Reasoning models (MiniMax, DeepSeek) think before answering; 60s was too short and cut answers off.
     timeoutMs: 180_000,
     // /imagine: model, daily call cap (one image per call), and a slower timeout.
     // Separate endpoint/key, because the chat proxy may not expose /image_generation.
