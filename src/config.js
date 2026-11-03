@@ -14,6 +14,7 @@ const imageBaseUrl = (process.env.AI_IMAGE_BASE_URL || chatBaseUrl).replace(/\/+
 
 module.exports = {
   token: process.env.DISCORD_TOKEN,
+  githubToken: process.env.GITHUB_TOKEN,
 
   owner: { name: 'Gentra' },
 
@@ -52,6 +53,9 @@ module.exports = {
   // ScoutCode release announcements (see src/updates.js).
   updateChannelId: process.env.UPDATE_CHANNEL_ID || '1566490353748680814',
   changelogChannelId: process.env.CHANGELOG_CHANNEL_ID || '1566490537006202880',
+
+  // ScoutBot repository commit announcements (see src/botrepo.js).
+  botRepoChannelId: process.env.BOT_REPO_CHANNEL_ID || '1567292394116751390',
 
   dataFile: path.join(__dirname, '..', 'data', 'store.json'),
   transcriptDir: path.join(__dirname, '..', 'data', 'transcripts'),

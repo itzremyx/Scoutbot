@@ -7,6 +7,7 @@ const levels = require('./src/levels');
 const chat = require('./src/chat');
 const automod = require('./src/automod');
 const updates = require('./src/updates');
+const botrepo = require('./src/botrepo');
 const stickies = require('./src/stickies');
 const reminders = require('./src/reminders');
 const { fail, isBotOwner } = require('./src/utils');
@@ -41,6 +42,7 @@ levels.register(client);
 chat.register(client);
 automod.register(client);
 updates.register(client);
+botrepo.register(client);
 stickies.register(client);
 
 function friendlyError(err) {
@@ -53,6 +55,7 @@ function friendlyError(err) {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
+  await c.user.setPresence({ status: 'dnd' });
   const count = await loader.registerCommands(c);
   console.log(`Registered ${count} slash commands. Global commands can take up to an hour to show up.`);
   giveaways.startScheduler(c);
