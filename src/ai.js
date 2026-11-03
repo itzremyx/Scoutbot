@@ -193,6 +193,42 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
 
   let activeModelName = model;
   let forcedTool = false;
+  // Same endpoint and key serve the fallback model (MiniMax-M3.1-Flash). It takes over whenever
+  // the primary model fails for any reason: rejected/renamed model, timeout, rate limit, outage,
+  // even a dropped connection — one switch per request is enough.
+  const fallbackName = config.ai.fallbackModel;
+  let fallbackUsed = !fallbackName || fallbackName === activeModelName;
+
+  const useFallback = (why) => {
+    fallbackUsed = true;
+    activeModelName = fallbackName;
+    console.warn(`AI fallback (${why}) → ${fallbackName}`);
+    onProgress(`${fallbackName} is answering instead…`);
+  };
+  // 401/403 mean the key itself is wrong; the fallback shares it, so it would fail identically.
+  const canSwitch = (status) => status !== 401 && status !== 403;
+
+  // One round: ask the current model, dropping to the fallback once on any failure.
+  const askOnce = async (withTools, toolChoice) => {
+    try {
+      const result = await ask(activeModelName, withTools, toolChoice);
+      if (!result.response.ok && !fallbackUsed && canSwitch(result.response.status)) {
+        useFallback(`HTTP ${result.response.status}`);
+        return await ask(activeModelName, withTools, toolChoice);
+      }
+      return result;
+    } catch (err) {
+      if (fallbackUsed) throw err;
+      useFallback(err.message);
+      try {
+        return await ask(activeModelName, withTools, toolChoice);
+      } catch (err2) {
+        console.warn(`AI fallback also failed (${fallbackName}): ${err2.message}; first error was: ${err.message}`);
+        throw err2;
+      }
+    }
+  };
+
   for (let round = 0; ; round++) {
     // Once tool rounds are used up, ask for a plain answer so the loop always ends.
     const useTools = tools && round < MAX_TOOL_ROUNDS;
@@ -201,13 +237,7 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
     // and the forced retry shows the browse step it is about to run).
     onProgress(forcedTool ? 'Browsing the internet for your question…' : round === 0 ? 'Thinking about your question…' : 'Reading the results…');
     const toolChoice = forcedTool ? 'required' : null;
-    let { response, data, payload } = await ask(activeModelName, useTools, toolChoice);
-
-    // 400/404 means the model itself was rejected (renamed or removed): retry once with the fallback.
-    if ((response.status === 400 || response.status === 404) && activeModelName !== config.ai.fallbackModel) {
-      activeModelName = config.ai.fallbackModel;
-      ({ response, data, payload } = await ask(activeModelName, useTools, toolChoice));
-    }
+    let { response, data, payload } = await askOnce(useTools, toolChoice);
 
     if (!response.ok) {
       const reason = data.error?.message ?? data.base_resp?.status_msg ?? response.statusText;
