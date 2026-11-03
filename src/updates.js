@@ -1,30 +1,32 @@
-// Posts new ScoutCode commits to the changelog channel, and a new CHANGELOG version to the update channel.
-// Watches the public repo's main branch every minute. The last announced commit and version are kept in
-// store.settings.updates so a restart does not repost anything. When nothing was ever announced (fresh
-// start, or the watcher came online after the last push) the current head is posted once, so the channels
-// are never left empty.
+// Posts new Scoutbot commits to the changelog channel, and a new ScoutCode CHANGELOG version to the update channel.
+// Watches the bot's own (private) repo every minute, so pushes made from this workspace show up in Discord.
+// The last announced commit and version are kept in store.settings.updates so a restart does not repost
+// anything. When nothing was ever announced (fresh start, or the watcher came online after the last push)
+// the current head is posted once, so the channels are never left empty.
 const { Events } = require('discord.js');
 const config = require('./config');
 const store = require('./storage');
 const { makeEmbed, truncate } = require('./utils');
 
-const REPO = 'gentraxyz/scoutcode';
-const BRANCH = 'main';
+const COMMITS_REPO = 'itzremyx/Scoutbot'; // private: needs GITHUB_TOKEN in .env
+const COMMITS_BRANCH = 'master';
+const CHANGELOG_REPO = 'gentraxyz/scoutcode'; // public: product versions in CHANGELOG.md
 const CHECK_EVERY_MS = 60_000;
 const MAX_COMMITS_PER_RUN = 10;
 
-const state = () => (store.data.settings.updates ??= { lastSha: null, announced: 0 });
+const state = () => (store.data.settings.updates ??= { repo: null, lastSha: null, announced: 0 });
 
-// GitHub allows 60 unauthenticated requests an hour. The last ETag is sent back so an unchanged branch
-// answers 304, which does not count against that limit.
+// The last ETag is sent back so an unchanged branch answers 304 and avoids unnecessary API work.
 let commitsEtag = null;
 
-// Latest commits on main, newest first. Returns null when nothing changed since the last check.
+// Latest commits on the watched branch, newest first. Returns null when nothing changed since the last check.
 async function fetchCommits() {
-  const response = await fetch(`https://api.github.com/repos/${REPO}/commits?sha=${BRANCH}&per_page=${MAX_COMMITS_PER_RUN}`, {
+  const response = await fetch(`https://api.github.com/repos/${COMMITS_REPO}/commits?sha=${COMMITS_BRANCH}&per_page=${MAX_COMMITS_PER_RUN}`, {
     headers: {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'Scoutbot',
+      // The repo is private, so the API needs a token; the ETag still saves rate limit when nothing changed.
+      ...(config.githubToken ? { Authorization: `Bearer ${config.githubToken}` } : {}),
       ...(commitsEtag ? { 'If-None-Match': commitsEtag } : {}),
     },
     signal: AbortSignal.timeout(20_000),
@@ -64,7 +66,7 @@ function parseCommit(commit) {
 
 // Latest version section of CHANGELOG.md (## <version> ...), or null.
 async function latestChangelog() {
-  const response = await fetch(`https://raw.githubusercontent.com/${REPO}/${BRANCH}/CHANGELOG.md`, {
+  const response = await fetch(`https://raw.githubusercontent.com/${CHANGELOG_REPO}/main/CHANGELOG.md`, {
     signal: AbortSignal.timeout(20_000),
   });
   if (!response.ok) return null;
@@ -101,6 +103,15 @@ async function postTo(client, channelId, embed) {
 // Runs one check. Returns how many commits were announced.
 async function checkOnce(client) {
   const s = state();
+  // The watch target may have changed (or this is the first run): start fresh and announce the current
+  // head once instead of replaying the old repo's history or staying silent forever.
+  if (s.repo !== COMMITS_REPO) {
+    s.repo = COMMITS_REPO;
+    s.lastSha = null;
+    s.announced = 0;
+    commitsEtag = null;
+    store.save();
+  }
   const list = await fetchCommits();
   const log = await latestChangelog().catch(() => null);
 
@@ -156,7 +167,7 @@ function register(client) {
     }
   };
   client.once(Events.ClientReady, () => {
-    console.log(`Updates: watching ${REPO} (${BRANCH}) every ${CHECK_EVERY_MS / 1000}s`);
+    console.log(`Updates: watching ${COMMITS_REPO} (${COMMITS_BRANCH}) every ${CHECK_EVERY_MS / 1000}s`);
     tick();
     setInterval(tick, CHECK_EVERY_MS);
   });

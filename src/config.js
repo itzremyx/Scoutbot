@@ -11,6 +11,8 @@ const envNumber = (name, fallback) => {
 
 module.exports = {
   token: process.env.DISCORD_TOKEN,
+  // Private GitHub repo access for the commit announcement watcher.
+  githubToken: process.env.GITHUB_TOKEN?.trim() || null,
 
   owner: { name: 'Gentra' },
 
