@@ -94,7 +94,32 @@ const TOOLS = [{
   },
 }];
 const TOOL_LABELS = { web_search: (args) => `Browsing the internet for "${args.query ?? '…'}"…` };
-const MAX_TOOL_ROUNDS = 4;
+const MAX_TOOL_ROUNDS = 6;
+const TOOL_NAMES = TOOLS.map((tool) => tool.function.name);
+
+// The model sometimes names a tool as plain text ("functions.web_search", "web_search", a list of
+// tool names) instead of emitting a structured tool call. Posting that raw text as the answer makes
+// the bot look stuck on the tool, so it is detected here and turned into a real call instead.
+// True only for a bare tool-name list (possibly Markdown-formatted), not a sentence that
+// happens to mention a tool. Returns only tools registered by the bot, excluding model wrappers.
+function mentionedToolNames(text) {
+  const segments = String(text ?? '')
+    .split(/[\n|,]/)
+    .map((s) => s.trim().replace(/^[-*•]\s*/, '').replace(/[`*]/g, '').trim()) // keep underscores: tool names use them
+    .map((s) => s.replace(/^(?:(?:available\s+tools?)|(?:tool\s+calls?)(?:\s+available)?|tools?)\s*:\s*/i, '').trim())
+    .filter(Boolean);
+  if (!segments.length) return null;
+  if (!segments.every((s) => /^[a-z_0-9]+(?:\.[a-z_]+)*$/i.test(s))) return null;
+
+  const names = segments
+    .map((s) => s.replace(/^functions\./i, '').toLowerCase())
+    .filter((s) => TOOL_NAMES.includes(s));
+  return names.length ? [...new Set(names)] : null;
+}
+
+function isToolMention(text) {
+  return mentionedToolNames(text) !== null;
+}
 
 // Runs one tool call and returns the text the model reads back.
 async function runTool(name, args) {
@@ -130,14 +155,18 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
   budget.assertAvailable();
 
   const conversationMessages = [...messages];
-  const ask = async (modelName, withTools) => {
+  const ask = async (modelName, withTools, toolChoice = null) => {
     const payload = {
       model: modelName,
       max_completion_tokens: maxTokens,
       messages: [{ role: 'system', content: system }, ...conversationMessages],
     };
     if (effort) payload.reasoning_effort = effort;
-    if (withTools) payload.tools = tools;
+    if (withTools) {
+      payload.tools = tools;
+      // 'required' is only set after the model wrote a tool name as text instead of calling it.
+      if (toolChoice) payload.tool_choice = toolChoice;
+    }
 
     let response;
     try {
@@ -163,18 +192,21 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
   };
 
   let activeModelName = model;
+  let forcedTool = false;
   for (let round = 0; ; round++) {
     // Once tool rounds are used up, ask for a plain answer so the loop always ends.
     const useTools = tools && round < MAX_TOOL_ROUNDS;
     // Show what is happening while the request runs: the first round is thinking, every later
-    // round is the model reading what the tools brought back (a search round announces itself).
-    onProgress(round === 0 ? 'Thinking about your question…' : 'Reading the results…');
-    let { response, data, payload } = await ask(activeModelName, useTools);
+    // round is the model reading what the tools brought back (a search round announces itself,
+    // and the forced retry shows the browse step it is about to run).
+    onProgress(forcedTool ? 'Browsing the internet for your question…' : round === 0 ? 'Thinking about your question…' : 'Reading the results…');
+    const toolChoice = forcedTool ? 'required' : null;
+    let { response, data, payload } = await ask(activeModelName, useTools, toolChoice);
 
     // 400/404 means the model itself was rejected (renamed or removed): retry once with the fallback.
     if ((response.status === 400 || response.status === 404) && activeModelName !== config.ai.fallbackModel) {
       activeModelName = config.ai.fallbackModel;
-      ({ response, data, payload } = await ask(activeModelName, useTools));
+      ({ response, data, payload } = await ask(activeModelName, useTools, toolChoice));
     }
 
     if (!response.ok) {
@@ -189,6 +221,8 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
     const choice = data.choices?.[0];
     const calls = useTools ? choice?.message?.tool_calls ?? [] : [];
     if (calls.length) {
+      // A real call came through: stop forcing, the model knows how to use the tools now.
+      forcedTool = false;
       // Keep the assistant turn with its tool calls, then answer each call so the model can continue.
       conversationMessages.push(choice.message);
       for (const call of calls) {
@@ -213,6 +247,22 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
         throw new Error('The AI ran out of room before answering. Try a shorter question.');
       }
       throw new Error('The AI returned an empty answer.');
+    }
+
+    // The model named a tool instead of calling it: never post that as an answer. Ask again with
+    // tool_choice 'required', so the search really runs (the loop stays bounded by MAX_TOOL_ROUNDS).
+    if (tools && isToolMention(text)) {
+      if (round < MAX_TOOL_ROUNDS) {
+        forcedTool = true;
+        conversationMessages.push({
+          role: 'user',
+          content: `You mentioned ${text.trim()} as text instead of calling it. Make a real tool call now, then answer.`,
+        });
+        continue;
+      }
+      // Out of tool rounds and it still only lists names: answer for it rather than posting a bare name.
+      const names = mentionedToolNames(text) ?? TOOL_NAMES;
+      return `I can call these tools: ${names.join(', ')}.`;
     }
     return text;
   }
@@ -371,4 +421,4 @@ function resetConversation(channelId) {
   store.save();
 }
 
-module.exports = { chat, generateImages, extractInstruction, activeModel, getPersonality, parseFacts, resetConversation };
+module.exports = { chat, generateImages, extractInstruction, activeModel, getPersonality, parseFacts, isToolMention, mentionedToolNames, resetConversation };
