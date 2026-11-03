@@ -3,15 +3,16 @@
 // store.settings.updates so a restart does not repost anything. When nothing was ever announced (fresh
 // start, or the watcher came online after the last push) the current head is posted once, so the channels
 // are never left empty.
-const { Events } = require('discord.js');
+const { Events, EmbedBuilder } = require('discord.js');
 const config = require('./config');
 const store = require('./storage');
-const { makeEmbed, truncate } = require('./utils');
+const { truncate } = require('./utils');
 
 const REPO = 'gentraxyz/scoutcode';
 const BRANCH = 'main';
 const CHECK_EVERY_MS = 60_000;
 const MAX_COMMITS_PER_RUN = 10;
+const SCOUTCODE_ICON = 'https://github.com/gentraxyz.png';
 
 const state = () => (store.data.settings.updates ??= { repo: null, lastSha: null, announced: 0 });
 
@@ -59,6 +60,7 @@ function parseCommit(commit) {
     body,
     url: commit.html_url,
     author: commit.commit.author?.name ?? 'unknown',
+    date: commit.commit.author?.date ?? commit.commit.committer?.date ?? null,
   };
 }
 
@@ -71,7 +73,47 @@ async function latestChangelog() {
   const text = await response.text();
   const match = text.match(/^## (.+)\n([\s\S]*?)(?=^## |\s*$(?![\s\S]))/m);
   if (!match) return null;
-  return { version: match[1].trim(), body: match[2].trim() };
+  return {
+    version: match[1].trim(),
+    body: match[2].trim(),
+    url: 'https://github.com/' + REPO + '/blob/' + BRANCH + '/CHANGELOG.md',
+  };
+}
+
+function commitEmbed(commit) {
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setAuthor({ name: 'ScoutCode  •  Commit', url: commit.url, iconURL: SCOUTCODE_ICON })
+    .setTitle('✨  ' + truncate(commit.subject, 240))
+    .setURL(commit.url)
+    .setDescription(commit.body ? truncate(commit.body, 900) : 'A new change has landed in ScoutCode.')
+    .addFields(
+      { name: 'Commit', value: '[' + commit.short + '](' + commit.url + ')', inline: true },
+      { name: 'Branch', value: '`' + BRANCH + '`', inline: true },
+      { name: 'Author', value: truncate(commit.author, 1024), inline: true },
+    )
+    .setFooter({ text: 'ScoutCode  •  GitHub commit' })
+    .setThumbnail(SCOUTCODE_ICON);
+  if (commit.date && !Number.isNaN(Date.parse(commit.date))) embed.setTimestamp(new Date(commit.date));
+  return embed;
+}
+
+function releaseEmbed(log) {
+  return new EmbedBuilder()
+    .setColor(0x57f287)
+    .setAuthor({ name: 'ScoutCode  •  Release', url: log.url, iconURL: SCOUTCODE_ICON })
+    .setTitle('🚀  ' + truncate(log.version, 240))
+    .setURL(log.url)
+    .setDescription(truncate(log.body || 'A new ScoutCode release is available.', 3800))
+    .addFields(
+      { name: 'Status', value: '✅ Published', inline: true },
+      { name: 'Branch', value: '`' + BRANCH + '`', inline: true },
+      { name: 'Changelog', value: '[View on GitHub](' + log.url + ')', inline: true },
+    )
+    .setFooter({ text: 'ScoutCode  •  Release notes' })
+    .setThumbnail(SCOUTCODE_ICON)
+    .setTimestamp();
+  return embed;
 }
 
 // Returns true only when the message was really sent, so the caller retries instead of silently losing a
@@ -128,11 +170,8 @@ async function checkOnce(client) {
 
   let posted = 0;
   for (const commit of toPost.map(parseCommit)) {
-    const lines = [`\`${commit.short}\` ${commit.subject}`];
-    if (commit.body) lines.push('', truncate(commit.body, 800));
-    lines.push('', `[View commit](${commit.url}) · by ${commit.author}`);
     // State only moves after a successful post: a failed send is retried next check.
-    const ok = await postTo(client, config.changelogChannelId, makeEmbed('info', 'Commit', lines.join('\n')));
+    const ok = await postTo(client, config.changelogChannelId, commitEmbed(commit));
     if (!ok) break;
     s.lastSha = commit.sha;
     s.announced += 1;
@@ -142,7 +181,7 @@ async function checkOnce(client) {
 
   // A new version in CHANGELOG.md goes to the update channel, once per version.
   if (log && log.version !== s.lastChangelog) {
-    const ok = await postTo(client, config.updateChannelId, makeEmbed('success', `Update ${log.version}`, truncate(log.body || 'No details.', 3800)));
+    const ok = await postTo(client, config.updateChannelId, releaseEmbed(log));
     if (ok) {
       s.lastChangelog = log.version;
       store.save();
@@ -171,4 +210,4 @@ function register(client) {
   });
 }
 
-module.exports = { register, checkOnce, parseCommit, latestChangelog };
+module.exports = { register, checkOnce, parseCommit, latestChangelog, commitEmbed, releaseEmbed };
