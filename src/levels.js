@@ -76,7 +76,6 @@ async function announceLevelUp(channel, user, level, cfg, guildId) {
   const file = new AttachmentBuilder(png, { name: 'level-up.png' });
   const sent = await channel
     .send({
-      content: `🎉 <@${user.id}> reached **level ${level}**!`,
       files: [file],
       content: 'Level up! <@' + user.id + '> reached level ' + level + '! This rank card will disappear in 10 seconds.',
       allowedMentions: { parse: [] },
