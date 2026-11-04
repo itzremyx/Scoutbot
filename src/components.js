@@ -3,7 +3,7 @@ const { claimTicket, closeTicket, createTicket, findOpenTicket, TICKET_TYPES } =
 const { handleUnwarnSelect } = require('./commands/warn');
 const { handleUnbanSelect } = require('./commands/moderation');
 const { joinGiveaway } = require('./giveaways');
-const { handleHelpSelect } = require('./help');
+const { handleHelpEnglish, handleHelpSelect } = require('./help');
 const { makeEmbed, sendLog } = require('./utils');
 
 async function handleTicketSelect(interaction) {
@@ -51,7 +51,8 @@ async function handleComponent(interaction) {
   if (id === 'automod:remove') return handleAutomodRemoveSelect(interaction);
   if (id === 'unban:select') return handleUnbanSelect(interaction);
   if (id.startsWith('giveaway:join:')) return joinGiveaway(interaction);
-  if (id === 'help:select') return handleHelpSelect(interaction, require('./loader').allCommands());
+  if (id.startsWith('help:select:')) return handleHelpSelect(interaction, require('./loader').allCommands());
+  if (id === 'help:english') return handleHelpEnglish(interaction, require('./loader').allCommands());
 }
 
 module.exports = { handleComponent };

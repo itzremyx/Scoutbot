@@ -8,6 +8,6 @@ module.exports = {
 
   async execute(interaction) {
     const isOwner = await isBotOwner(interaction.client, interaction.user.id);
-    return interaction.reply(helpPayload(loader.allCommands(), isOwner));
+    return interaction.reply(helpPayload(loader.allCommands(), isOwner, interaction.locale));
   },
 };

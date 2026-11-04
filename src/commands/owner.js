@@ -95,6 +95,7 @@ const botreload = {
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
+      config.reload();
       const count = await loader.reload(interaction.client);
       return interaction.editReply({
         embeds: [makeEmbed('success', 'Reloaded', `Reloaded ${count} commands from disk. Global command updates can take up to an hour to show.`)],

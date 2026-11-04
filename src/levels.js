@@ -78,12 +78,13 @@ async function announceLevelUp(channel, user, level, cfg, guildId) {
     .send({
       content: `🎉 <@${user.id}> reached **level ${level}**!`,
       files: [file],
+      content: 'Level up! <@' + user.id + '> reached level ' + level + '! This rank card will disappear in 10 seconds.',
       allowedMentions: { parse: [] },
     })
     .catch(() => null);
   if (!sent) return;
 
-  // Deleted by the scheduler after 2 minutes. Stored in store.json, so the timer survives restarts.
+  // Deleted by the scheduler after 10 seconds. Stored in store.json, so the timer survives restarts.
   cfg.pending.push({ channelId: sent.channelId, messageId: sent.id, deleteAt: Date.now() + DELETE_AFTER_MS });
   store.save();
 }

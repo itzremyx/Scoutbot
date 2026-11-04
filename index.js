@@ -8,6 +8,7 @@ const chat = require('./src/chat');
 const automod = require('./src/automod');
 const updates = require('./src/updates');
 const botrepo = require('./src/botrepo');
+const presence = require('./src/presence');
 const stickies = require('./src/stickies');
 const reminders = require('./src/reminders');
 const { fail, isBotOwner } = require('./src/utils');
@@ -55,7 +56,7 @@ function friendlyError(err) {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
-  await c.user.setPresence({ status: 'dnd' });
+  await presence.apply(c);
   const count = await loader.registerCommands(c);
   console.log(`Registered ${count} slash commands. Global commands can take up to an hour to show up.`);
   giveaways.startScheduler(c);

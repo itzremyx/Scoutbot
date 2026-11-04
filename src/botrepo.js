@@ -55,7 +55,42 @@ function parseCommit(commit) {
     body: rest.filter((line) => !/^Co-Authored-By:/i.test(line)).join('\n').trim(),
     url: commit.html_url,
     author: commit.commit.author?.name ?? 'unknown',
+    githubAuthor: commit.author?.login ?? null,
+    authorUrl: commit.author?.html_url ?? null,
+    avatarUrl: commit.author?.avatar_url ?? null,
     date: commit.commit.author?.date ?? commit.commit.committer?.date ?? null,
+  };
+}
+
+async function fetchCommitDetails(sha) {
+  try {
+    const response = await fetch('https://api.github.com/repos/' + REPO + '/commits/' + sha, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'Scoutbot',
+        ...(config.githubToken ? { Authorization: 'Bearer ' + config.githubToken } : {}),
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function enrichCommit(commit) {
+  const parsed = parseCommit(commit);
+  const detail = await fetchCommitDetails(parsed.sha);
+  const author = detail?.author ?? commit.author;
+  return {
+    ...parsed,
+    githubAuthor: author?.login ?? parsed.githubAuthor,
+    authorUrl: author?.html_url ?? parsed.authorUrl,
+    avatarUrl: author?.avatar_url ?? parsed.avatarUrl,
+    filesChanged: Array.isArray(detail?.files) ? detail.files.length : null,
+    additions: Number.isFinite(detail?.stats?.additions) ? detail.stats.additions : null,
+    deletions: Number.isFinite(detail?.stats?.deletions) ? detail.stats.deletions : null,
   };
 }
 
@@ -69,10 +104,14 @@ function commitEmbed(commit) {
     .addFields(
       { name: 'Commit', value: `[${commit.short}](${commit.url})`, inline: true },
       { name: 'Branch', value: `\`${BRANCH}\``, inline: true },
-      { name: 'Author', value: truncate(commit.author, 1024), inline: true },
+      { name: 'Modified by', value: commit.githubAuthor && commit.authorUrl ? '[' + truncate(commit.githubAuthor, 80) + '](' + commit.authorUrl + ')' : truncate(commit.author, 1024), inline: true },
     )
     .setFooter({ text: 'ScoutBot  •  GitHub commit' })
     .setThumbnail(REPO_ICON);
+  if (commit.avatarUrl) embed.setAuthor({ name: 'ScoutBot  -  Commit', url: commit.url, iconURL: commit.avatarUrl });
+  if (commit.filesChanged !== null && commit.filesChanged !== undefined) {
+    embed.addFields({ name: 'Changes', value: '`' + commit.filesChanged + ' file(s) • +' + (commit.additions ?? 0) + ' / -' + (commit.deletions ?? 0) + '`', inline: true });
+  }
   if (commit.date && !Number.isNaN(Date.parse(commit.date))) embed.setTimestamp(new Date(commit.date));
   return embed;
 }
@@ -119,7 +158,7 @@ async function checkOnce(client) {
   }
 
   let posted = 0;
-  for (const commit of (list ? newCommits(list, current.lastSha) : []).map(parseCommit)) {
+  for (const commit of await Promise.all((list ? newCommits(list, current.lastSha) : []).map(enrichCommit))) {
     if (!await postTo(client, commitEmbed(commit))) break;
     current.lastSha = commit.sha;
     current.announced += 1;

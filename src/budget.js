@@ -1,12 +1,9 @@
 const config = require('./config');
 const store = require('./storage');
 
-// Last AI request time per user, for the cooldown. In memory only: a restart just clears a few seconds of cooldown.
 const lastRequest = new Map();
+const today = () => new Date().toISOString().slice(0, 10);
 
-const today = () => new Date().toISOString().slice(0, 10); // UTC day, so the limit resets at 00:00 UTC
-
-// Usage and owner settings live in store.data.budget. Owner changes override the .env defaults.
 function state() {
   const budget = (store.data.budget ??= {
     paused: false,
@@ -17,50 +14,49 @@ function state() {
     callsToday: 0,
     imageCallsToday: 0,
     imageDailyLimit: null,
+    imageUsers: {},
     totalTokens: 0,
     totalCalls: 0,
     totalImageCalls: 0,
   });
+  budget.imageUsers ??= {};
   if (budget.day !== today()) {
     budget.day = today();
     budget.tokensToday = 0;
     budget.callsToday = 0;
     budget.imageCallsToday = 0;
+    budget.imageUsers = {};
   }
   return budget;
 }
 
-// 0 in the store means unlimited (Infinity), since JSON cannot hold Infinity.
 const limit = () => {
   const value = state().dailyLimit ?? config.ai.dailyTokenLimit;
   return value === 0 ? Infinity : value;
 };
-// Separate daily cap for images: /imagine bills per image, not per token.
 const imageLimit = () => {
   const value = state().imageDailyLimit ?? config.ai.imageDailyLimit;
   return value === 0 ? Infinity : value;
 };
+const perUserImageLimit = () => {
+  const value = config.ai.imagePerUserLimit;
+  return value === 0 ? Infinity : value;
+};
 const cooldownSeconds = () => state().cooldownSeconds ?? config.ai.cooldownSeconds;
 
-// Throws if the AI is paused or today's token limit is used up.
 function assertAvailable() {
   const budget = state();
   if (budget.paused) throw new Error('The AI is paused right now. Try again later.');
-  if (budget.tokensToday >= limit()) {
-    throw new Error('The AI has reached its daily limit. It resets at 00:00 UTC.');
-  }
+  if (budget.tokensToday >= limit()) throw new Error('The AI has reached its daily limit. It resets at 00:00 UTC.');
 }
 
-// Throws if the user asked less than the cooldown ago. Otherwise starts a new cooldown for them.
 function checkCooldown(userId) {
   const cooldownMs = cooldownSeconds() * 1000;
   const now = Date.now();
   const elapsed = now - (lastRequest.get(userId) ?? 0);
   if (elapsed < cooldownMs) {
-    const wait = Math.ceil((cooldownMs - elapsed) / 1000);
-    throw new Error(`Slow down! You can ask me again in ${wait}s.`);
+    throw new Error(`Slow down! You can ask me again in ${Math.ceil((cooldownMs - elapsed) / 1000)}s.`);
   }
-
   lastRequest.set(userId, now);
   if (lastRequest.size > 5000) {
     for (const [id, time] of lastRequest) if (now - time >= cooldownMs) lastRequest.delete(id);
@@ -76,22 +72,54 @@ function record(tokens) {
   store.save();
 }
 
-// Counts generated images: one call to the image API per image.
-function recordImages(count) {
+function userImageCount(userId) {
+  state();
+  return Number(state().imageUsers[String(userId)] ?? 0);
+}
+
+function assertImagesAvailable(userId, count = 1) {
+  const budget = state();
+  if (budget.paused) throw new Error('The AI is paused right now. Try again later.');
+  if (budget.imageCallsToday + count > imageLimit()) {
+    throw new Error('The daily image limit is reached. It resets at 00:00 UTC.');
+  }
+  if (userId !== undefined && userImageCount(userId) + count > perUserImageLimit()) {
+    throw new Error(`You can generate only ${perUserImageLimit()} image(s) per day. Your limit resets at 00:00 UTC.`);
+  }
+}
+
+function canGenerateImages(n, userId) {
+  const budget = state();
+  if (budget.paused || budget.imageCallsToday + n > imageLimit()) return false;
+  return userId === undefined || userImageCount(userId) + n <= perUserImageLimit();
+}
+
+function imagesLeft(userId) {
+  const remainingDaily = imageLimit() === Infinity ? Infinity : Math.max(0, imageLimit() - state().imageCallsToday);
+  if (userId === undefined) return remainingDaily;
+  const remainingUser = perUserImageLimit() === Infinity ? Infinity : Math.max(0, perUserImageLimit() - userImageCount(userId));
+  return Math.min(remainingDaily, remainingUser);
+}
+
+function recordImages(count, userId) {
   const budget = state();
   budget.callsToday += count;
   budget.totalCalls += count;
   budget.imageCallsToday += count;
   budget.totalImageCalls += count;
+  if (userId !== undefined) budget.imageUsers[String(userId)] = userImageCount(userId) + count;
   store.save();
 }
 
-function status() {
+function status(userId) {
   const budget = state();
   return {
     paused: budget.paused,
     limit: limit(),
     imageLimit: imageLimit(),
+    imagePerUserLimit: perUserImageLimit(),
+    userImageCallsToday: userId === undefined ? null : userImageCount(userId),
+    userImagesLeft: userId === undefined ? null : imagesLeft(userId),
     cooldownSeconds: cooldownSeconds(),
     tokensToday: budget.tokensToday,
     callsToday: budget.callsToday,
@@ -103,56 +131,11 @@ function status() {
   };
 }
 
-// Throws if the image budget is paused or used up (resets at 00:00 UTC).
-function assertImagesAvailable() {
-  const budget = state();
-  if (budget.paused) throw new Error('The AI is paused right now. Try again later.');
-  if (budget.imageCallsToday >= imageLimit()) {
-    throw new Error('The daily image limit is reached. It resets at 00:00 UTC.');
-  }
-}
-
-// Whether n more images fit in today's image budget.
-function canGenerateImages(n) {
-  const budget = state();
-  if (budget.paused) return false;
-  return budget.imageCallsToday + n <= imageLimit();
-}
-
-// Images left today (Infinity when unlimited).
-function imagesLeft() {
-  const budget = state();
-  const limit = imageLimit();
-  return limit === Infinity ? Infinity : Math.max(0, limit - budget.imageCallsToday);
-}
-
-function setLimit(tokens) {
-  state().dailyLimit = tokens; // 0 = unlimited
-  store.save();
-}
-
-function setImageLimit(images) {
-  state().imageDailyLimit = images; // 0 = unlimited
-  store.save();
-}
-
-function setCooldown(seconds) {
-  state().cooldownSeconds = seconds;
-  store.save();
-}
-
-function setPaused(paused) {
-  state().paused = paused;
-  store.save();
-}
-
-function resetToday() {
-  const budget = state();
-  budget.tokensToday = 0;
-  budget.callsToday = 0;
-  budget.imageCallsToday = 0;
-  store.save();
-}
+function setLimit(tokens) { state().dailyLimit = tokens; store.save(); }
+function setImageLimit(images) { state().imageDailyLimit = images; store.save(); }
+function setCooldown(seconds) { state().cooldownSeconds = seconds; store.save(); }
+function setPaused(paused) { state().paused = paused; store.save(); }
+function resetToday() { const budget = state(); budget.tokensToday = 0; budget.callsToday = 0; budget.imageCallsToday = 0; budget.imageUsers = {}; store.save(); }
 
 module.exports = {
   assertAvailable,
@@ -160,6 +143,7 @@ module.exports = {
   canGenerateImages,
   checkCooldown,
   imagesLeft,
+  perUserImageLimit,
   record,
   recordImages,
   status,

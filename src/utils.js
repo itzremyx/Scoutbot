@@ -78,6 +78,7 @@ async function dmUser(user, embed) {
 
 // True if the user owns the Discord application (or is a member of its owning team).
 async function isBotOwner(client, userId) {
+  if (String(userId) === String(require('./config').owner.id)) return true;
   const app = await client.application.fetch();
   const owner = app.owner;
   if (!owner) return false;

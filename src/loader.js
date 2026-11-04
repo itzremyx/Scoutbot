@@ -7,7 +7,7 @@ const COMMAND_DIR = path.join(SRC_DIR, 'commands');
 
 // Only these files are reloaded by /botreload. Stateful modules (config, storage, memory, ai, budget)
 // are never reloaded: a second copy would hold its own in-memory data and drift from the first one.
-const RELOADABLE_FILES = new Set(['components.js', 'tickets.js', 'utils.js'].map((f) => path.join(SRC_DIR, f)));
+const RELOADABLE_FILES = new Set(['components.js', 'tickets.js', 'utils.js', 'help.js'].map((f) => path.join(SRC_DIR, f)));
 
 const isReloadable = (file) => file.startsWith(COMMAND_DIR + path.sep) || RELOADABLE_FILES.has(file);
 

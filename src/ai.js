@@ -396,12 +396,27 @@ async function chat({ channelId, guildId, botName, userId, speaker, question, im
   const userMessage = { role: 'user', content: multimodalContent(`${speaker}: ${question}`, imageUrls) };
   const historyMessage = {
     role: 'user',
-    content: `${speaker}: ${question}${imageUrls.length ? '\n[Image attached]' : ''}`,
+    content: speaker + ': ' + question + (imageUrls.length ? '\n[Image attached]' : ''),
   };
-  const answer = await callModel(systemPrompt(botName, speaker, userId, guildId), [...history, userMessage], {
-    tools: TOOLS,
-    onProgress,
-  });
+  let answer;
+  try {
+    answer = await callModel(systemPrompt(botName, speaker, userId, guildId), [...history, userMessage], {
+      tools: TOOLS,
+      onProgress,
+    });
+  } catch (err) {
+    const configuredVisionModel = config.ai.visionModel;
+    const visionModel = configuredVisionModel && configuredVisionModel !== 'auto'
+      ? configuredVisionModel
+      : config.ai.fallbackModel;
+    if (!imageUrls.length || !visionModel || visionModel === activeModel()) throw err;
+    onProgress('The vision fallback is analyzing the image…');
+    answer = await callModel(systemPrompt(botName, speaker, userId, guildId), [...history, userMessage], {
+      model: visionModel,
+      tools: TOOLS,
+      onProgress,
+    });
+  }
 
   // Keep image URLs out of store.json: Discord CDN links can expire and should not be persisted.
   history.push(historyMessage, { role: 'assistant', content: answer });
@@ -420,11 +435,11 @@ async function generateImages({ userId, prompt, ratio, count = 1 }) {
     throw new Error('Image generation is not configured. Set AI_IMAGE_API_KEY in the .env file.');
   }
   budget.checkCooldown(userId);
-  budget.assertImagesAvailable();
 
   const n = Math.max(1, Math.trunc(count));
-  if (!budget.canGenerateImages(n)) {
-    throw new Error(`Only ${budget.imagesLeft()} image(s) left today. Try fewer images.`);
+  budget.assertImagesAvailable(userId, n);
+  if (!budget.canGenerateImages(n, userId)) {
+    throw new Error(`Only ${budget.imagesLeft(userId)} image(s) left today. Try fewer images.`);
   }
 
   const isImageApi = /\/images(?:\/generations)?$/.test(config.ai.imageEndpoint);
@@ -472,7 +487,7 @@ async function generateImages({ userId, prompt, ratio, count = 1 }) {
   const status = data.base_resp?.status_code;
   if (!response.ok || (status !== undefined && status !== 0)) {
     const reason = data.base_resp?.status_msg ?? data.error?.message ?? response.statusText;
-    if (status === 1026) throw new Error('Content safety blocked that prompt. Try a different one.');
+    if (status === 1026) throw new Error(`Content safety blocked that prompt${reason ? `: ${reason}` : ''}. Try a different one.`);
     if (status === 1008) throw new Error('The account has insufficient balance for image generation.');
     if (response.status === 404) {
       throw new Error(`No image endpoint at ${config.ai.imageBaseUrl}${config.ai.imageEndpoint} (404). Check AI_IMAGE_BASE_URL and AI_IMAGE_ENDPOINT in the .env file.`);
@@ -480,7 +495,8 @@ async function generateImages({ userId, prompt, ratio, count = 1 }) {
     throw new Error(`Image generation failed (${status ?? response.status}): ${reason}`);
   }
 
-  budget.recordImages(n);
+  budget.recordImages(n, userId);
+  savePrompt(userId, prompt);
 
   const imageValues = isImageApi
     ? (Array.isArray(data.data) ? data.data.map((item) => item?.b64_json ?? item?.image_base64 ?? item?.url) : [])
@@ -501,11 +517,31 @@ async function generateImages({ userId, prompt, ratio, count = 1 }) {
   if (!images.length) {
     throw new Error(
       failed
-        ? 'All generated images were blocked by content safety. Try a different prompt.'
+        ? `All generated images were blocked by content safety${data.metadata?.safety_reason ? `: ${data.metadata.safety_reason}` : ''}. Try a different prompt.`
         : 'No image was returned. Try again.',
     );
   }
   return { images, failed };
+}
+
+function promptHistory(userId) {
+  const all = (store.data.settings.imagineHistory ??= {});
+  return Array.isArray(all[String(userId)]) ? all[String(userId)] : [];
+}
+
+function savePrompt(userId, prompt) {
+  const all = (store.data.settings.imagineHistory ??= {});
+  const key = String(userId);
+  const value = String(prompt).trim();
+  const history = Array.isArray(all[key]) ? all[key] : [];
+  all[key] = [value, ...history.filter((item) => item !== value)].slice(0, 5);
+  store.save();
+}
+
+function clearPromptHistory(userId) {
+  const all = (store.data.settings.imagineHistory ??= {});
+  delete all[String(userId)];
+  store.save();
 }
 
 function resetConversation(channelId) {
@@ -513,4 +549,4 @@ function resetConversation(channelId) {
   store.save();
 }
 
-module.exports = { chat, generateImages, extractInstruction, activeModel, lastModel, getPersonality, parseFacts, isToolMention, mentionedToolNames, multimodalContent, resetConversation };
+module.exports = { chat, generateImages, extractInstruction, activeModel, lastModel, getPersonality, parseFacts, isToolMention, mentionedToolNames, multimodalContent, promptHistory, clearPromptHistory, resetConversation };
