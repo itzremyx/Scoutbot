@@ -32,7 +32,15 @@ async function fetchCommits() {
     },
   );
   if (response.status === 304) return null;
-  if (!response.ok) throw new Error(`GitHub ${response.status} for ${REPO}`);
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error(`GitHub 404 for ${REPO}. The repository may be private; set GITHUB_TOKEN with repository read access.`);
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`GitHub ${response.status} for ${REPO}. Check GITHUB_TOKEN permissions and rate limits.`);
+    }
+    throw new Error(`GitHub ${response.status} for ${REPO}`);
+  }
   commitsEtag = response.headers.get('etag');
   return response.json();
 }
@@ -150,15 +158,20 @@ async function checkOnce(client) {
   }
 
   const list = await fetchCommits();
-  if (!current.lastSha) {
+  const firstRun = !current.lastSha;
+  if (firstRun) {
     if (!list?.length) return 0;
+    // Keep the first-run behavior useful: announce the current head once instead of
+    // silently consuming it as a baseline. Later checks only announce newer commits.
     current.lastSha = list[0].sha;
     store.save();
-    return 0;
   }
 
   let posted = 0;
-  for (const commit of await Promise.all((list ? newCommits(list, current.lastSha) : []).map(enrichCommit))) {
+  const fresh = list ? newCommits(list, current.lastSha) : [];
+  const baseline = (current.announced ?? 0) === 0;
+  const toPost = fresh.length ? fresh : (baseline && list?.length ? [list[0]] : []);
+  for (const commit of await Promise.all(toPost.map(enrichCommit))) {
     if (!await postTo(client, commitEmbed(commit))) break;
     current.lastSha = commit.sha;
     current.announced += 1;

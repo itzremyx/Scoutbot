@@ -11,17 +11,22 @@ module.exports = {
 
   async execute(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const [scoutCode, scoutBot] = await Promise.all([
-      updates.checkOnce(interaction.client),
-      botrepo.checkOnce(interaction.client),
-    ]);
-    return interaction.editReply({
-      embeds: [makeEmbed(
-        'success',
-        'Repository refresh complete',
-        `ScoutCode commits posted: **${scoutCode}**\nScoutBot commits posted: **${scoutBot}**`,
-      )],
-      flags: MessageFlags.Ephemeral,
-    });
+    try {
+      const [scoutCode, scoutBot] = await Promise.all([
+        updates.checkOnce(interaction.client),
+        botrepo.checkOnce(interaction.client),
+      ]);
+      return interaction.editReply({
+        embeds: [makeEmbed(
+          'success',
+          'Repository refresh complete',
+          `ScoutCode commits posted: **${scoutCode}**\nScoutBot commits posted: **${scoutBot}**`,
+        )],
+      });
+    } catch (err) {
+      return interaction.editReply({
+        embeds: [makeEmbed('error', 'Repository refresh failed', err.message)],
+      });
+    }
   },
 };
