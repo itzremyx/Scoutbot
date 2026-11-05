@@ -16,8 +16,8 @@ const CATEGORIES = {
   backups: { label: 'Backups', emoji: String.fromCodePoint(0x1F4BE), description: 'Save and restore roles and channels', commands: ['backup'] },
   logs: { label: 'Logs', emoji: String.fromCodePoint(0x1F4DC), description: 'Activity logs and setup', commands: ['logs', 'setup'] },
   ai: { label: 'AI', emoji: String.fromCodePoint(0x1F916), description: 'Ask questions, draw images, memory and personality', commands: ['ask', 'imagine', 'image-quota', 'prompt-history', 'memory', 'personality'] },
-  utility: { label: 'Utility', emoji: String.fromCodePoint(0x1F9F0), description: 'Server and user information, health and reminders', commands: ['help', 'health', 'ping', 'avatar', 'userinfo', 'serverinfo', 'remind'] },
-  owner: { label: 'Bot owner', emoji: String.fromCodePoint(0x1F451), description: 'Bot statistics, diagnostics, presence, repository checks and reload', commands: ['botstats', 'botreload', 'debug', 'presence', 'repo-refresh'], ownerOnly: true },
+  utility: { label: 'Utility', emoji: String.fromCodePoint(0x1F9F0), description: 'Server and user information, health and reminders', commands: ['help', 'health', 'ping', 'avatar', 'userinfo', 'serverinfo', 'remind', 'changelog', 'download'] },
+  owner: { label: 'Bot owner', emoji: String.fromCodePoint(0x1F451), description: 'Bot statistics, diagnostics, presence, repository checks and reload', commands: ['botstats', 'botreload', 'debug', 'presence', 'repo-refresh', 'role'], ownerOnly: true },
 };
 
 const OTHER = { label: 'Other', emoji: String.fromCodePoint(0x1F4E6), description: 'Commands without a category', commands: [] };

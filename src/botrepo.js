@@ -201,4 +201,12 @@ function register(client) {
   });
 }
 
-module.exports = { register, checkOnce, parseCommit, commitEmbed, newCommits };
+// Public helper used by /changelog: the newest commits on the branch, enriched with the
+// GitHub author, avatar and file statistics.
+async function recentCommits(count = 10) {
+  const list = await fetchCommits();
+  if (!list?.length) return [];
+  return list.slice(0, Math.max(1, count)).map(enrichCommit);
+}
+
+module.exports = { register, checkOnce, parseCommit, commitEmbed, newCommits, recentCommits };

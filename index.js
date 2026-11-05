@@ -11,6 +11,9 @@ const botrepo = require('./src/botrepo');
 const presence = require('./src/presence');
 const stickies = require('./src/stickies');
 const reminders = require('./src/reminders');
+const errors = require('./src/errors');
+const databackup = require('./src/databackup');
+const autorole = require('./src/autorole');
 const { fail, isBotOwner } = require('./src/utils');
 
 if (!config.token) {
@@ -44,6 +47,7 @@ chat.register(client);
 automod.register(client);
 updates.register(client);
 botrepo.register(client);
+autorole.register(client);
 stickies.register(client);
 
 function friendlyError(err) {
@@ -89,3 +93,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 // Chat replies (mentions in servers, plain conversation in DMs) live in src/chat.js.
 client.login(config.token);
+
+// Reports crashed never reach the event loop without these: uncaught exceptions,
+// rejected promises and client/rest/shard errors are posted to the bot repo channel.
+errors.install(client);
+
+// Snapshot data/store.json every 8 hours so user data and settings can be restored.
+databackup.register();
