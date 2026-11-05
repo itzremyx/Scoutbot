@@ -32,7 +32,7 @@ module.exports = {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setLabel('Download Windows')
-        .setStyle(ButtonStyle.Success)
+        .setStyle(ButtonStyle.Link)
         .setEmoji('🪟')
         .setURL(WEBSITE_URL + '/download/windows'),
       new ButtonBuilder()
