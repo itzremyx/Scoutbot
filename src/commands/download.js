@@ -76,12 +76,16 @@ module.exports = {
       .addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small))
       .addActionRowComponents(buttons);
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    await interaction.deleteReply().catch(() => {});
-    return interaction.channel.send({
+    await interaction.deferReply();
+    const sent = await interaction.channel.send({
       components: [container],
       files: [banner],
       flags: MessageFlags.IsComponentsV2,
     });
+    await interaction.deleteReply().catch(() => {});
+    const invocation = await interaction.channel.messages.fetch({ limit: 10 }).catch(() => null);
+    const mine = invocation?.find((message) => message.interaction?.id === interaction.id);
+    if (mine) await mine.delete().catch(() => {});
+    return sent;
   },
 };
