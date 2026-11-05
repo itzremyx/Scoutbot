@@ -49,7 +49,7 @@ module.exports = {
 
     const buttons = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setLabel('Download Windows').setStyle(ButtonStyle.Link).setEmoji('🪟').setURL(WINDOWS_URL),
-      new ButtonBuilder().setLabel('Mac (coming soon)').setStyle(ButtonStyle.Secondary).setDisabled(true),
+      new ButtonBuilder().setCustomId('download:mac-soon').setLabel('Mac (coming soon)').setStyle(ButtonStyle.Secondary).setDisabled(true),
       new ButtonBuilder().setLabel('GitHub').setStyle(ButtonStyle.Link).setEmoji('⭐').setURL(GITHUB_URL),
       new ButtonBuilder().setLabel('Website').setStyle(ButtonStyle.Link).setEmoji('🌐').setURL(WEBSITE_URL),
     );
