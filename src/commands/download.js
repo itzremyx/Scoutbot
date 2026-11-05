@@ -76,7 +76,9 @@ module.exports = {
       .addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small))
       .addActionRowComponents(buttons);
 
-    return interaction.reply({
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deleteReply().catch(() => {});
+    return interaction.channel.send({
       components: [container],
       files: [banner],
       flags: MessageFlags.IsComponentsV2,
