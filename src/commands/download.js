@@ -66,7 +66,7 @@ module.exports = {
     return interaction.reply({
       components: [container],
       files: [banner],
-      flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+      flags: MessageFlags.IsComponentsV2,
     });
   },
 };
