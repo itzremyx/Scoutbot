@@ -45,7 +45,7 @@ function buildConfig() {
     changelogChannelId: process.env.CHANGELOG_CHANNEL_ID || '1566490537006202880',
     botRepoChannelId: process.env.BOT_REPO_CHANNEL_ID || '1567292394116751390',
     // Role given to every member who joins (set by /role all; 0 = disabled).
-    autoRoleId: process.env.AUTO_ROLE_ID || '0',
+    autoRoleId: process.env.AUTO_ROLE_ID || '1566953972290289764',
     dataFile: path.join(__dirname, '..', 'data', 'store.json'),
     transcriptDir: path.join(__dirname, '..', 'data', 'transcripts'),
   };
