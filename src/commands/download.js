@@ -19,6 +19,18 @@ const BANNER = path.join(__dirname, '..', '..', 'assets', 'download-banner.png')
 const GITHUB_URL = 'https://github.com/gentraxyz/scoutcode';
 const WEBSITE_URL = 'https://scoutcode.dev';
 const WINDOWS_URL = WEBSITE_URL + '/download/windows';
+const FALLBACK_VERSION = '0.1.16';
+
+async function latestVersion() {
+  try {
+    const updates = require('../updates');
+    const log = await updates.latestChangelog();
+    const version = String(log?.version || '').replace(/^v/i, '').trim();
+    return version || FALLBACK_VERSION;
+  } catch {
+    return FALLBACK_VERSION;
+  }
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -26,6 +38,7 @@ module.exports = {
     .setDescription('Download ScoutCode — the coding harness for any model'),
 
   async execute(interaction) {
+    const version = await latestVersion();
     const banner = new AttachmentBuilder(BANNER).setName('scoutcode-download.png');
 
     const gallery = new MediaGalleryBuilder().addItems(
@@ -42,7 +55,7 @@ module.exports = {
     const body = new TextDisplayBuilder().setContent(
       'Bring your own AI model into your projects. Free models, offline-ready configs and a local-first workflow.\n\n' +
       '**Platform** — Windows 10/11 (x64), current release\n' +
-      '**Version** — `0.1.16`\n' +
+      '**Version** — `' + version + '`\n' +
       '**Source** — open source on [GitHub](' + GITHUB_URL + ')\n' +
       '**Mac** — coming soon',
     );
