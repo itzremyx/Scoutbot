@@ -17,6 +17,8 @@ const state = () => (store.data.settings.botRepo ??= {
 });
 
 let commitsEtag = null;
+let localGit = null;
+let githubAuth = true;
 
 // Reads the bot's own checkout with git so a private repo still gets its changelog without a
 // GitHub token. Falls back to the GitHub API only when git is unavailable and a token is set.
@@ -44,8 +46,8 @@ function localCommit(entry) {
 }
 
 async function fetchCommits() {
-  // Prefer the local checkout: no GitHub token needed, works for private repos.
-  try {
+  // Prefer the local checkout. Skip it after one failure so a container without git stays quiet.
+  if (localGit !== false) try {
     const format = '%H%x1f%aI%x1f%an%x1f%s%x1f%b%x1e';
     const stdout = await new Promise((resolve, reject) => {
       execFile('git', ['log', BRANCH, '-n' + MAX_COMMITS_PER_RUN, '--pretty=format:' + format], {
@@ -54,10 +56,11 @@ async function fetchCommits() {
         maxBuffer: 1024 * 1024,
       }, (error, out) => (error ? reject(error) : resolve(out)));
     });
+    localGit = true;
     return String(stdout).split('\u001e').map((entry) => entry.trim()).filter(Boolean).map(localCommit);
   } catch (err) {
-    // Not a repository checkout or git is missing; fall through to the API when possible.
-    console.warn('BotRepo: local git log unavailable (' + err.message + '); trying GitHub API');
+    localGit = false;
+    console.warn('BotRepo: local git log unavailable; using the public GitHub API');
   }
 
   // The repo is public, so a token is optional. A bad token makes GitHub answer 401 even for a
@@ -68,13 +71,14 @@ async function fetchCommits() {
       headers: {
         Accept: 'application/vnd.github+json',
         'User-Agent': 'Scoutbot',
-        ...(config.githubToken ? { Authorization: 'Bearer ' + config.githubToken } : {}),
+        ...(githubAuth && config.githubToken ? { Authorization: 'Bearer ' + config.githubToken } : {}),
         ...(commitsEtag ? { 'If-None-Match': commitsEtag } : {}),
       },
       signal: AbortSignal.timeout(20_000),
     },
   );
   if ((response.status === 401 || response.status === 403) && config.githubToken) {
+    githubAuth = false;
     console.warn('BotRepo: GitHub token was rejected; reading the public repo without it');
     const open = await fetch(
       'https://api.github.com/repos/' + REPO + '/commits?sha=' + BRANCH + '&per_page=' + MAX_COMMITS_PER_RUN,
@@ -131,7 +135,7 @@ async function fetchCommitDetails(sha) {
       headers: {
         Accept: 'application/vnd.github+json',
         'User-Agent': 'Scoutbot',
-        ...(config.githubToken ? { Authorization: 'Bearer ' + config.githubToken } : {}),
+        ...(githubAuth && config.githubToken ? { Authorization: 'Bearer ' + config.githubToken } : {}),
       },
       signal: AbortSignal.timeout(20_000),
     });
