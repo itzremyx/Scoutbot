@@ -247,15 +247,18 @@ async function checkOnce(client) {
   // A brand-new install (announced === 0) still posts that head once, below.
   // announced counts attempts; delivered counts messages Discord accepted.
   // A restart can save the sha and still leave the channel empty, so repost the gap.
-  if ((current.delivered ?? 0) < (current.announced ?? 0)) current.lastSha = null;
+  // Old state counted attempts before Discord confirmed them. Replay once, but do not
+  // advance lastSha until the sends below succeed.
+  const replayUndelivered = (current.delivered ?? 0) < (current.announced ?? 0);
+  if (replayUndelivered) current.lastSha = null;
 
   if (!current.lastSha) {
     current.lastSha = list[0].sha;
-    store.save();
+    if (!replayUndelivered) store.save();
   }
 
   let posted = 0;
-  const fresh = newCommits(list, current.lastSha);
+  const fresh = replayUndelivered ? [] : newCommits(list, current.lastSha);
   const baseline = (current.announced ?? 0) === 0;
   const toPost = fresh.length ? fresh : (baseline ? [list[0]] : []);
 
@@ -263,7 +266,7 @@ async function checkOnce(client) {
   // commit lands, often while Discord is still accepting the message. Saving first keeps the
   // next boot from announcing it again; alreadyPosted covers a send that arrived but died
   // before this save.
-  if (fresh.length) {
+  if (fresh.length && !replayUndelivered) {
     current.lastSha = fresh[0].sha;
     store.save();
   }
