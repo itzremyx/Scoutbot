@@ -18,14 +18,59 @@ const state = () => (store.data.settings.botRepo ??= {
 
 let commitsEtag = null;
 
+// Reads the bot's own checkout with git so a private repo still gets its changelog without a
+// GitHub token. Falls back to the GitHub API only when git is unavailable and a token is set.
+const { execFile } = require('child_process');
+const path = require('path');
+const REPO_ROOT = path.join(__dirname, '..');
+
+function localCommit(entry) {
+  const parts = entry.split('\u001f');
+  const sha = parts[0];
+  const authorDate = parts[1];
+  const authorName = parts[2];
+  const subject = parts[3] || '';
+  const body = parts.slice(4).join('\u001f');
+  const newline = String.fromCharCode(10);
+  return {
+    sha,
+    html_url: 'https://github.com/' + REPO + '/commit/' + sha,
+    commit: {
+      message: body ? subject + newline + newline + body : subject,
+      author: { name: authorName || 'unknown', date: authorDate || null },
+      committer: { date: authorDate || null },
+    },
+  };
+}
+
 async function fetchCommits() {
+  // Prefer the local checkout: no GitHub token needed, works for private repos.
+  try {
+    const format = '%H%x1f%aI%x1f%an%x1f%s%x1f%b%x1e';
+    const stdout = await new Promise((resolve, reject) => {
+      execFile('git', ['log', BRANCH, '-n' + MAX_COMMITS_PER_RUN, '--pretty=format:' + format], {
+        cwd: REPO_ROOT,
+        timeout: 20_000,
+        maxBuffer: 1024 * 1024,
+      }, (error, out) => (error ? reject(error) : resolve(out)));
+    });
+    return String(stdout).split('\u001e').map((entry) => entry.trim()).filter(Boolean).map(localCommit);
+  } catch (err) {
+    // Not a repository checkout or git is missing; fall through to the API when possible.
+    console.warn('BotRepo: local git log unavailable (' + err.message + '); trying GitHub API');
+  }
+
+  // Fall back to the GitHub API only when a token is configured.
+  if (!config.githubToken) {
+    throw new Error('Local git log failed and no GITHUB_TOKEN is configured');
+  }
   const response = await fetch(
-    `https://api.github.com/repos/${REPO}/commits?sha=${BRANCH}&per_page=${MAX_COMMITS_PER_RUN}`,
+    'https://api.github.com/repos/' + REPO + '/commits?sha=' + BRANCH + '&per_page=' + MAX_COMMITS_PER_RUN,
     {
       headers: {
         Accept: 'application/vnd.github+json',
         'User-Agent': 'Scoutbot',
-        ...(config.githubToken ? { Authorization: `Bearer ${config.githubToken}` } : {}),
+        Authorization: 'Bearer ' + config.githubToken,
         ...(commitsEtag ? { 'If-None-Match': commitsEtag } : {}),
       },
       signal: AbortSignal.timeout(20_000),
@@ -34,12 +79,12 @@ async function fetchCommits() {
   if (response.status === 304) return null;
   if (!response.ok) {
     if (response.status === 404) {
-      throw new Error(`GitHub 404 for ${REPO}. The repository may be private; set GITHUB_TOKEN with repository read access.`);
+      throw new Error('GitHub 404 for ' + REPO + '. The repository may be private; set GITHUB_TOKEN with repository read access.');
     }
     if (response.status === 401 || response.status === 403) {
-      throw new Error(`GitHub ${response.status} for ${REPO}. Check GITHUB_TOKEN permissions and rate limits.`);
+      throw new Error('GitHub ' + response.status + ' for ' + REPO + '. Check GITHUB_TOKEN permissions and rate limits.');
     }
-    throw new Error(`GitHub ${response.status} for ${REPO}`);
+    throw new Error('GitHub ' + response.status + ' for ' + REPO);
   }
   commitsEtag = response.headers.get('etag');
   return response.json();
@@ -206,7 +251,7 @@ function register(client) {
 async function recentCommits(count = 10) {
   const list = await fetchCommits();
   if (!list?.length) return [];
-  return list.slice(0, Math.max(1, count)).map(enrichCommit);
+  return Promise.all(list.slice(0, Math.max(1, count)).map(enrichCommit));
 }
 
 module.exports = { register, checkOnce, parseCommit, commitEmbed, newCommits, recentCommits };
