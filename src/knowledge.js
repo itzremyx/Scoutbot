@@ -17,7 +17,21 @@ const SCOUTCODE = [
   'Updates: signed updates download in the background and install on restart. SCOUT_NO_UPDATE=1 turns them off. Release notes are in the CHANGELOG on GitHub.',
   'Environment variables: SCOUTCODE_API_KEY and SCOUTCODE_BASE_URL (use another key or server), SCOUT_HOME (data folder), SCOUT_TERMINAL (terminal shell), SCOUT_NO_UPDATE, SCOUT_UPDATE_URL.',
   'For billing, accounts or bugs you cannot solve: point the user to https://scoutcode.dev and to the support channels on this Discord. Never invent prices, limits or release dates.',
-  'ScoutCode has the following partners: Enzonic (https://enzonic.com) and AnyServer (https://anyserver.pro). Enzonic also has these side projects: https://deploy.enzonic.com/, https://remy.enzonic.com/, https://database.enzonic.com/, https://domains.enzonic.com/, https://ci.enzonic.com/, https://relay.enzonic.com/, https://launcher.enzonic.com/, https://clips.enzonic.com/, https://simpmuse.enzonic.com/, https://minemate.enzonic.com/, https://mai.enzonic.com/, https://modpacks.net/, https://aevon.ink/, https://rapidfile.cc/, https://mc-smp.page/ and https://enzonic.dev/.',
+  'Enzonic (https://enzonic.com) is a game-server host with 24/7 servers, pay-per-minute Flex servers, free Minecraft servers, modpacks, subdomains, databases, backups, a web panel and a REST API.',
+  'Enzonic Deploy (https://deploy.enzonic.com) connects GitHub, GitLab or Gitea repositories and deploys websites or bots with builds, environment variables, logs and automatic redeploys.',
+  'Enzonic Domains (https://domains.enzonic.com) registers and manages domains, DNS records, WHOIS privacy and redirects.',
+  'Enzonic CI (https://ci.enzonic.com) provides Git-triggered CI/CD builds and deployments for repositories.',
+  'Enzonic Relay (https://relay.enzonic.com) provides outbound email relays for applications and bots.',
+  'Enzonic Launcher (https://launcher.enzonic.com) is a custom Minecraft launcher service with themes, Java builds and automatic updates.',
+  'SimpMuse (https://simpmuse.enzonic.com) is an AI companion and roleplay site.',
+  'MineMate (https://minemate.enzonic.com) is an AI assistant for Minecraft players.',
+  'Modpacks.net (https://modpacks.net) is a Minecraft modpack site.',
+  'Aevon (https://aevon.ink) is a link-in-bio and creator-page service.',
+  'RapidFile (https://rapidfile.cc) is a file-sharing service.',
+  'MC-SMP (https://mc-smp.page) is a Minecraft server and SMP directory.',
+  'Enzonic.dev (https://enzonic.dev) is the developer portal for the Enzonic API.',
+  'The remaining listed partner domains are https://remy.enzonic.com, https://database.enzonic.com, https://clips.enzonic.com and https://mai.enzonic.com. Do not invent features for them when they are not stated here.',
+  'AnyServer (https://anyserver.pro) is also a ScoutCode partner.',
 ];
 
 // Focus of the bot: ScoutCode first, general questions second.

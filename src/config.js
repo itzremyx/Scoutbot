@@ -30,7 +30,7 @@ function buildConfig() {
       reasoningEffort: process.env.AI_REASONING_EFFORT ?? 'medium',
       maxTokens: 2048,
       timeoutMs: 180_000,
-      imageModel: process.env.AI_IMAGE_MODEL || 'openai-gpt-5-image',
+      imageModel: process.env.AI_IMAGE_MODEL || 'gpt-5-mini-image',
       imageBaseUrl,
       imageEndpoint: process.env.AI_IMAGE_ENDPOINT || '/images/generations',
       imageApiKey: process.env.AI_IMAGE_API_KEY || process.env.AI_API_KEY,
@@ -52,6 +52,22 @@ function buildConfig() {
 }
 
 const config = buildConfig();
+
+// /setup stores these on the single server the bot runs for, and they win over the .env defaults
+// so a change applies on the next read without editing the environment or restarting.
+const storeOverrides = { aiChannelId: "aiChannelId", botRepoChannelId: "botRepoChannelId", autoRoleId: "autoRoleId" };
+for (const key of Object.keys(storeOverrides)) {
+  const fallback = config[key];
+  Object.defineProperty(config, key, {
+    configurable: true,
+    enumerable: true,
+    get() {
+      const saved = require("./storage").data.settings?.[storeOverrides[key]];
+      return saved ? String(saved) : fallback;
+    },
+  });
+}
+
 
 // Reload environment-backed values without creating a second config object in modules that require it.
 config.reload = () => {

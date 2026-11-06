@@ -60,11 +60,18 @@ module.exports = {
       '**Mac** — coming soon',
     );
 
-    const buttons = new ActionRowBuilder().addComponents(
+    const pad = (name) => new ButtonBuilder().setCustomId('download:pad:' + name).setLabel('​').setStyle(ButtonStyle.Secondary).setDisabled(true);
+    const downloads = new ActionRowBuilder().addComponents(
+      pad('left'),
       new ButtonBuilder().setLabel('Download Windows').setStyle(ButtonStyle.Link).setEmoji('🪟').setURL(WINDOWS_URL),
       new ButtonBuilder().setCustomId('download:mac-soon').setLabel('Mac (coming soon)').setStyle(ButtonStyle.Secondary).setDisabled(true),
+      pad('right'),
+    );
+    const links = new ActionRowBuilder().addComponents(
+      pad('github-left'),
       new ButtonBuilder().setLabel('GitHub').setStyle(ButtonStyle.Link).setEmoji('⭐').setURL(GITHUB_URL),
       new ButtonBuilder().setLabel('Website').setStyle(ButtonStyle.Link).setEmoji('🌐').setURL(WEBSITE_URL),
+      pad('github-right'),
     );
 
     const container = new ContainerBuilder()
@@ -74,7 +81,8 @@ module.exports = {
       .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
       .addTextDisplayComponents(body)
       .addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small))
-      .addActionRowComponents(buttons);
+      .addActionRowComponents(downloads)
+      .addActionRowComponents(links);
 
     await interaction.deferReply();
     const sent = await interaction.channel.send({

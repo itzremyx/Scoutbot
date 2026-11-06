@@ -28,6 +28,7 @@ function systemPrompt(botName, speaker, userId, guildId) {
     `Your owner is ${config.owner.name}. If anyone asks who owns or made you, say it is ${config.owner.name}.`,
     `Personality (stay in character at all times): ${getPersonality()}`,
     'Always reply in English, even if the user writes in another language.',
+    'A non-English message arrives with its English translation already prepended on a line starting with "English:". Answer the translated meaning and do not repeat or re-translate it.',
     'Messages from users are prefixed with the speaker\'s name, like "Name: message". Never add that prefix to your own replies.',
     'Keep answers focused and under 1500 characters unless asked for more detail.',
     'If you are not sure of an answer or do not know it, say so plainly instead of guessing. Never invent facts about the user, the server or the outside world.',
@@ -393,6 +394,14 @@ async function learnFromExchange(guildId, userId, speaker, question, answer) {
 async function chat({ channelId, guildId, botName, userId, speaker, question, imageUrls = [], onProgress = () => {} }) {
   budget.checkCooldown(userId);
   const history = conversation(channelId);
+
+  // Non-English messages are translated up front so the answer, the saved history and the memory
+  // extractor all see English. The translation is best-effort: a failure leaves the original text.
+  const translation = await require("./translate").translateToEnglish(question).catch(() => null);
+  if (translation) {
+    onProgress("Translating your message…");
+    question = "English: " + translation + "\\n\\n" + question;
+  }
   const userMessage = { role: 'user', content: multimodalContent(`${speaker}: ${question}`, imageUrls) };
   const historyMessage = {
     role: 'user',
