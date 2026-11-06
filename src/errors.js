@@ -9,7 +9,16 @@ function clip(value, max = 900) {
   return text.length > max ? text.slice(0, max - 1) + '…' : text;
 }
 
+function transientGateway(err) {
+  const text = String(err?.stack || err?.message || err || "");
+  return /Unexpected server response: 50[0234]|ECONNRESET|ETIMEDOUT|EAI_AGAIN|getaddrinfo|other side closed/i.test(text);
+}
+
 function reportError(client, source, err) {
+  if ((source === "shard" || source === "client") && transientGateway(err)) {
+    console.warn("[error] transient " + source + ":", clip(err?.message || err, 200));
+    return;
+  }
   const message = clip(err?.stack || err?.message || err);
   const key = source + ':' + message.slice(0, 180);
   const now = Date.now();
