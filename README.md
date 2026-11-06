@@ -1,45 +1,40 @@
 # ScoutBot
 
-Discord bot with AI chat, support tickets, moderation, levels, logs, giveaways and backups.
+Private Discord bot for Gentra's server. It is not packaged or configured as a multi-server bot: the owner, AI channel, changelog channels, auto-role and command defaults all belong to this one server.
 
-## Setup
+It handles AI chat, support tickets, moderation, levels, logs, giveaways and backups for that server.
+
+## Run it
 
 ```bash
 npm install
-cp .env.example .env   # then fill in DISCORD_TOKEN and the AI_* keys
+cp .env.example .env
 node index.js
 ```
 
-Only `DISCORD_TOKEN`, `GITHUB_TOKEN` (needed because the ScoutBot repository is private) and
-`AI_*` settings belong in `.env`; it is gitignored and never uploaded. `GITHUB_TOKEN` needs
-read access to `itzremyx/Scoutbot`.
+Put the server's `DISCORD_TOKEN` and `AI_API_KEY` in `.env`. The file stays on the machine and is gitignored.
 
-The bot can read image attachments in normal chat and with `/ask image`. `/imagine` uses
-ScoutCode's `openai-gpt-5-image` through `https://scoutcode.dev/v1/images/generations` and
-reuses `AI_API_KEY` by default. `AI_IMAGE_BASE_URL`, `AI_IMAGE_ENDPOINT` and `AI_IMAGE_API_KEY`
-can override those defaults for another compatible provider.
+`GITHUB_TOKEN` is optional. `itzremyx/Scoutbot` is public, so commit announcements work without it. If a token is present but rejected, the bot retries the public GitHub API without it.
 
-The bot watches `itzremyx/Scoutbot` on `master` and posts the current commit once on first
-sync, then every new commit, to `BOT_REPO_CHANNEL_ID`. Use `/repo-refresh` as the owner to
-trigger an immediate check. The bot needs `View Channel`, `Send Messages` and `Embed Links`
-permissions in that Discord channel.
+## This server
 
-## Sending changes to GitHub
+The default IDs in `src/config.js` are the live IDs for Gentra's server:
 
-Run `push.cmd` (double-click, or from a terminal with an optional message):
+- AI channel: `1566503029916700752`
+- ScoutCode updates: `1566490353748680814`
+- ScoutCode changelog: `1566490537006202880`
+- ScoutBot commits: `1567292394116751390`
+- auto-role: `1566953972290289764`
+- owner: Gentra (`1561860035158736898`)
 
-```bat
-push.cmd "Fix rank card colors"
-```
+ScoutBot commit posts need `View Channel`, `Send Messages` and `Embed Links` in the commit channel. The bot posts each new commit once. `/repo-refresh` forces a check, and `/changelog` shows recent commits on demand.
 
-It stages everything, commits if something changed and pushes. On the very first run it also
-creates the GitHub repository and links it as `origin`.
+## Deploy
 
-The host can then pull from `https://github.com/itzremyx/Scoutbot.git`. `data/`, `.env` and
-`node_modules/` are gitignored, so pulls never overwrite the host's own settings or database.
+`push.cmd` commits local changes and pushes them to `https://github.com/itzremyx/Scoutbot.git`. The Enzonic host pulls that repository and restarts the bot. `data/`, `.env` and `node_modules/` are not part of the deployment, so the host keeps its own settings and database.
 
-## Useful commands
+## Commands
 
-- `/help` — list all commands
-- `/setup` — first-run configuration (logs channel, tickets, levels)
-- `/memory` — user facts, server rules, pending approvals
+- `/help` lists the commands
+- `/setup` configures logs, tickets and levels
+- `/memory` manages user facts, server rules and pending approvals
