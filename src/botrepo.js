@@ -245,6 +245,10 @@ async function checkOnce(client) {
 
   // First sight of this repo: remember the head without replaying history.
   // A brand-new install (announced === 0) still posts that head once, below.
+  // announced counts attempts; delivered counts messages Discord accepted.
+  // A restart can save the sha and still leave the channel empty, so repost the gap.
+  if ((current.delivered ?? 0) < (current.announced ?? 0)) current.lastSha = null;
+
   if (!current.lastSha) {
     current.lastSha = list[0].sha;
     store.save();
@@ -267,6 +271,7 @@ async function checkOnce(client) {
   for (const commit of await Promise.all(toPost.map(enrichCommit))) {
     if (!await postTo(client, commitEmbed(commit), commit.sha)) break;
     current.announced += 1;
+    current.delivered = current.announced;
     posted += 1;
     store.save();
   }
