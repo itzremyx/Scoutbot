@@ -118,6 +118,38 @@ function drawTokens(ctx, x, y, tokens) {
 
 const shorten = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
+// The shared code-editor chrome (window, tab, traffic lights, model glyph). Reused by the
+// welcome card so both cards stay visually in the same family.
+function drawEditorFrame(ctx, W, H, tabLabel, theme) {
+  roundRect(ctx, 0, 0, W, H, 22);
+  ctx.fillStyle = '#1e1e1e';
+  ctx.fill();
+  ctx.save();
+  roundRect(ctx, 0, 0, W, H, 22);
+  ctx.clip();
+  ctx.fillStyle = '#252526';
+  ctx.fillRect(0, 0, W, 44);
+  ctx.restore();
+  for (const [color, x] of [['#ff5f57', 24], ['#febc2e', 44], ['#28c840', 64]]) {
+    ctx.beginPath();
+    ctx.arc(x, 22, 6, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  ctx.fillStyle = '#1e1e1e';
+  ctx.fillRect(84, 0, 170, 44);
+  ctx.fillStyle = theme.accent;
+  ctx.fillRect(84, 0, 170, 2);
+  ctx.font = SMALL_FONT;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#cccccc';
+  ctx.fillText(tabLabel, 104, 28);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = theme.accent;
+  ctx.fillText(theme.label, W - 44, 28);
+  theme.glyph(ctx, W - 24, 22, 9, theme.accent);
+}
+
 // "2h 14m", "45m" or "3h" — voice time as hours and minutes.
 function formatDuration(ms) {
   const minutes = Math.floor(Math.max(0, ms) / 60_000);
@@ -144,36 +176,7 @@ async function renderRankCard({ username, avatarUrl, themeId, level, xp, floor, 
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
-  roundRect(ctx, 0, 0, W, H, 22);
-  ctx.fillStyle = '#1e1e1e';
-  ctx.fill();
-
-  // Title bar with traffic lights, a "rank.ts" tab and the model theme on the right.
-  ctx.save();
-  roundRect(ctx, 0, 0, W, H, 22);
-  ctx.clip();
-  ctx.fillStyle = '#252526';
-  ctx.fillRect(0, 0, W, 44);
-  ctx.restore();
-
-  for (const [color, x] of [['#ff5f57', 24], ['#febc2e', 44], ['#28c840', 64]]) {
-    ctx.beginPath();
-    ctx.arc(x, 22, 6, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-  }
-  ctx.fillStyle = '#1e1e1e';
-  ctx.fillRect(84, 0, 170, 44);
-  ctx.fillStyle = theme.accent;
-  ctx.fillRect(84, 0, 170, 2);
-  ctx.font = SMALL_FONT;
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#cccccc';
-  ctx.fillText('rank.ts', 104, 28);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = theme.accent;
-  ctx.fillText(theme.label, W - 44, 28);
-  theme.glyph(ctx, W - 24, 22, 9, theme.accent);
+  drawEditorFrame(ctx, W, H, 'rank.ts', theme);
 
   // Code body: a line-numbered gutter with the member's stats written as constants.
   const lines = [
@@ -250,4 +253,4 @@ async function renderRankCard({ username, avatarUrl, themeId, level, xp, floor, 
   return canvas.encode('png');
 }
 
-module.exports = { renderRankCard, THEME_CHOICES, formatDuration };
+module.exports = { renderRankCard, THEME_CHOICES, formatDuration, drawEditorFrame, THEMES };

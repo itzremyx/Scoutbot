@@ -14,6 +14,8 @@ const reminders = require('./src/reminders');
 const errors = require('./src/errors');
 const databackup = require('./src/databackup');
 const autorole = require('./src/autorole');
+const welcome = require('./src/welcome');
+const snipe = require('./src/snipe');
 const { fail, isBotOwner } = require('./src/utils');
 
 if (!config.token) {
@@ -48,6 +50,8 @@ automod.register(client);
 updates.register(client);
 botrepo.register(client);
 autorole.register(client);
+welcome.register(client);
+snipe.register(client);
 stickies.register(client);
 
 function friendlyError(err) {
