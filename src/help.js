@@ -16,7 +16,7 @@ const CATEGORIES = {
   backups: { label: 'Backups', emoji: String.fromCodePoint(0x1F4BE), description: 'Save and restore roles and channels', commands: ['backup'] },
   logs: { label: 'Logs', emoji: String.fromCodePoint(0x1F4DC), description: 'Activity logs and setup', commands: ['logs', 'setup'] },
   ai: { label: 'AI', emoji: String.fromCodePoint(0x1F916), description: 'Ask questions, draw images, memory and personality', commands: ['ask', 'imagine', 'image-quota', 'prompt-history', 'memory', 'personality'] },
-  utility: { label: 'Utility', emoji: String.fromCodePoint(0x1F9F0), description: 'Server and user information, health and reminders', commands: ['help', 'health', 'ping', 'avatar', 'userinfo', 'serverinfo', 'remind', 'changelog', 'download'] },
+  utility: { label: 'Utility', emoji: String.fromCodePoint(0x1F9F0), description: 'Server and user information, health and reminders', commands: ['help', 'health', 'ping', 'avatar', 'userinfo', 'serverinfo', 'remind', 'changelog', 'download', 'link'] },
   radio: { label: 'Radio', emoji: String.fromCodePoint(0x1F3B5), description: 'Play music in a voice channel and show the current track', commands: ['radio'] },
   owner: { label: 'Bot owner', emoji: String.fromCodePoint(0x1F451), description: 'Bot statistics, diagnostics, presence, repository checks and reload', commands: ['botstats', 'botreload', 'debug', 'presence', 'repo-refresh', 'role'], ownerOnly: true },
 };
