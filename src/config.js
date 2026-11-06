@@ -46,6 +46,14 @@ function buildConfig() {
     botRepoChannelId: process.env.BOT_REPO_CHANNEL_ID || '1567292394116751390',
     // Role given to every member who joins (set by /role all; 0 = disabled).
     autoRoleId: process.env.AUTO_ROLE_ID || '1566953972290289764',
+    // ScoutRadio: rename the voice channel while a track plays, and feed YouTube either a
+    // cookies string or a cookies file (only needed for age-restricted / members-only links).
+    radio: {
+      renameChannel: process.env.RADIO_RENAME_CHANNEL !== 'false',
+      channelPrefix: process.env.RADIO_CHANNEL_PREFIX || 'Radio',
+      youtubeCookies: process.env.YOUTUBE_COOKIES || '',
+      cookiesFile: process.env.YTDLP_COOKIES_FILE || '',
+    },
     dataFile: path.join(__dirname, '..', 'data', 'store.json'),
     transcriptDir: path.join(__dirname, '..', 'data', 'transcripts'),
   };
