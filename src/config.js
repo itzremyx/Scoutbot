@@ -16,6 +16,8 @@ function buildConfig() {
   return {
     token: process.env.DISCORD_TOKEN,
     githubToken: process.env.GITHUB_TOKEN,
+    discordBotSecret: process.env.DISCORD_BOT_SECRET || '',
+    siteUrl: (process.env.SCOUTCODE_SITE_URL || (process.env.AI_BASE_URL || 'https://scoutcode.dev/v1').replace(/\/v1\/?$/, '')).replace(/\/+$/, ''),
     owner: {
       name: 'Gentra',
       id: process.env.BOT_OWNER_ID || '1561860035158736898',

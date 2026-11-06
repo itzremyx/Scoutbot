@@ -108,3 +108,14 @@ test('helpPayload is ephemeral and provides categories in English by default', (
   assert.strictEqual(payload.embeds.length, 1);
   assert.ok(payload.components.length >= 2);
 });
+
+test('link command has valid name, description, and required code option', () => {
+  const link = require('../src/commands/link');
+  assert.ok(link.data);
+  assert.strictEqual(link.data.name, 'link');
+  const json = link.data.toJSON();
+  assert.strictEqual(json.name, 'link');
+  const codeOpt = json.options.find((o) => o.name === 'code');
+  assert.ok(codeOpt);
+  assert.strictEqual(codeOpt.required, true);
+});
