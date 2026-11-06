@@ -32,6 +32,7 @@ const SCOUTCODE = [
   'Enzonic.dev (https://enzonic.dev) is the developer portal for the Enzonic API.',
   'The remaining listed partner domains are https://remy.enzonic.com, https://database.enzonic.com, https://clips.enzonic.com and https://mai.enzonic.com. Do not invent features for them when they are not stated here.',
   'AnyServer (https://anyserver.pro) is also a ScoutCode partner.',
+  'Git, explained simply: a commit is a snapshot of changed files with a message, saved in the repository history. A branch is a separate line of that history. Pushing uploads local commits to a remote like GitHub. A pull request (PR) is a request on GitHub or GitLab to merge one branch into another: it is a review and discussion process, not a change itself, and it usually contains several commits. Merging a PR combines that branch back into the target branch. A PR and a commit are different things: the commit is the recorded change, the PR is the request to review and merge it.',
 ];
 
 // Focus of the bot: ScoutCode first, general questions second.
