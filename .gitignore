@@ -3,3 +3,6 @@ data/
 .scout/
 
 .env
+
+# never commit deployment credentials
+.enzonic/
