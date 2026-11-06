@@ -258,9 +258,10 @@ async function checkOnce(client) {
   }
 
   let posted = 0;
-  const fresh = replayUndelivered ? [] : newCommits(list, current.lastSha);
+  const fresh = newCommits(list, current.lastSha);
   const baseline = (current.announced ?? 0) === 0;
-  const toPost = fresh.length ? fresh : (baseline ? [list[0]] : []);
+  const replayCount = Math.max(0, (current.announced ?? 0) - (current.delivered ?? 0));
+  const toPost = fresh.length ? fresh : (replayUndelivered ? list.slice(0, replayCount) : (baseline ? [list[0]] : []));
 
   // Remember the newest sha before sending. Deploy restarts this process as soon as the
   // commit lands, often while Discord is still accepting the message. Saving first keeps the
