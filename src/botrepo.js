@@ -60,22 +60,32 @@ async function fetchCommits() {
     console.warn('BotRepo: local git log unavailable (' + err.message + '); trying GitHub API');
   }
 
-  // Fall back to the GitHub API only when a token is configured.
-  if (!config.githubToken) {
-    throw new Error('Local git log failed and no GITHUB_TOKEN is configured');
-  }
+  // The repo is public, so a token is optional. A bad token makes GitHub answer 401 even for a
+  // public repo, which is worse than sending no token at all.
   const response = await fetch(
     'https://api.github.com/repos/' + REPO + '/commits?sha=' + BRANCH + '&per_page=' + MAX_COMMITS_PER_RUN,
     {
       headers: {
         Accept: 'application/vnd.github+json',
         'User-Agent': 'Scoutbot',
-        Authorization: 'Bearer ' + config.githubToken,
+        ...(config.githubToken ? { Authorization: 'Bearer ' + config.githubToken } : {}),
         ...(commitsEtag ? { 'If-None-Match': commitsEtag } : {}),
       },
       signal: AbortSignal.timeout(20_000),
     },
   );
+  if ((response.status === 401 || response.status === 403) && config.githubToken) {
+    console.warn('BotRepo: GitHub token was rejected; reading the public repo without it');
+    const open = await fetch(
+      'https://api.github.com/repos/' + REPO + '/commits?sha=' + BRANCH + '&per_page=' + MAX_COMMITS_PER_RUN,
+      {
+        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Scoutbot' },
+        signal: AbortSignal.timeout(20_000),
+      },
+    );
+    if (!open.ok) throw new Error('GitHub ' + open.status + ' for ' + REPO);
+    return open.json();
+  }
   if (response.status === 304) return null;
   if (!response.ok) {
     if (response.status === 404) {
