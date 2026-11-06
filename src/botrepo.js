@@ -169,25 +169,49 @@ function commitEmbed(commit) {
   return embed;
 }
 
-async function postTo(client, embed) {
+async function channelOf(client) {
   const channelId = config.botRepoChannelId;
   if (!channelId) {
     console.error('BotRepo: no channel id configured');
-    return false;
+    return null;
   }
   const channel = await client.channels.fetch(channelId).catch((err) => {
-    console.error(`BotRepo: cannot open channel ${channelId}: ${err.message}`);
+    console.error('BotRepo: cannot open channel ' + channelId + ': ' + err.message);
     return null;
   });
   if (!channel?.isTextBased()) {
-    console.error(`BotRepo: channel ${channelId} is missing or is not a text channel`);
-    return false;
+    console.error('BotRepo: channel ' + channelId + ' is missing or is not a text channel');
+    return null;
+  }
+  return channel;
+}
+
+// A deploy restarts the process right after the push. The send can reach Discord and still be
+// lost here if the process dies before store.save(). A commit already in the channel counts as posted.
+async function alreadyPosted(channel, sha) {
+  const short = String(sha || '').slice(0, 7);
+  if (!short || !channel.messages?.fetch) return false;
+  const recent = await channel.messages.fetch({ limit: 20 }).catch(() => null);
+  if (!recent) return false;
+  const me = channel.client.user?.id;
+  return recent.some((message) => message.author?.id === me && message.embeds?.some((embed) => {
+    const bits = [embed.url, embed.description, ...(embed.fields || []).map((field) => field.value)];
+    return bits.some((bit) => String(bit || '').includes(short));
+  }));
+}
+
+async function postTo(client, embed, sha) {
+  const channel = await channelOf(client);
+  if (!channel) return false;
+  if (await alreadyPosted(channel, sha)) {
+    console.log('BotRepo: commit ' + String(sha).slice(0, 7) + ' is already in the channel');
+    return true;
   }
   const sent = await channel.send({ embeds: [embed] }).catch((err) => {
-    console.error(`BotRepo: sending update to ${channelId} failed: ${err.message}`);
+    console.error('BotRepo: sending update to ' + channel.id + ' failed: ' + err.message);
     return null;
   });
-  if (sent) console.log(`BotRepo: posted update to channel ${channelId}`);
+  if (sent) console.log('BotRepo: posted update to channel ' + channel.id);
   return Boolean(sent);
 }
 
@@ -203,22 +227,31 @@ async function checkOnce(client) {
   }
 
   const list = await fetchCommits();
-  const firstRun = !current.lastSha;
-  if (firstRun) {
-    if (!list?.length) return 0;
-    // Keep the first-run behavior useful: announce the current head once instead of
-    // silently consuming it as a baseline. Later checks only announce newer commits.
+  if (!list?.length) return 0;
+
+  // First sight of this repo: remember the head without replaying history.
+  // A brand-new install (announced === 0) still posts that head once, below.
+  if (!current.lastSha) {
     current.lastSha = list[0].sha;
     store.save();
   }
 
   let posted = 0;
-  const fresh = list ? newCommits(list, current.lastSha) : [];
+  const fresh = newCommits(list, current.lastSha);
   const baseline = (current.announced ?? 0) === 0;
-  const toPost = fresh.length ? fresh : (baseline && list?.length ? [list[0]] : []);
+  const toPost = fresh.length ? fresh : (baseline ? [list[0]] : []);
+
+  // Remember the newest sha before sending. Deploy restarts this process as soon as the
+  // commit lands, often while Discord is still accepting the message. Saving first keeps the
+  // next boot from announcing it again; alreadyPosted covers a send that arrived but died
+  // before this save.
+  if (fresh.length) {
+    current.lastSha = fresh[0].sha;
+    store.save();
+  }
+
   for (const commit of await Promise.all(toPost.map(enrichCommit))) {
-    if (!await postTo(client, commitEmbed(commit))) break;
-    current.lastSha = commit.sha;
+    if (!await postTo(client, commitEmbed(commit), commit.sha)) break;
     current.announced += 1;
     posted += 1;
     store.save();
