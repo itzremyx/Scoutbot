@@ -48,30 +48,38 @@ module.exports = {
     );
 
     const title = new TextDisplayBuilder().setContent(
-      '# [ScoutCode](' + WEBSITE_URL + ')\n' +
+      '## [ScoutCode](' + WEBSITE_URL + ')\n' +
       'The coding harness for any model.',
     );
 
-    const body = new TextDisplayBuilder().setContent(
-      'Bring your own AI model into your projects. Free models, offline-ready configs and a local-first workflow.\n\n' +
-      '**Platform** — Windows 10/11 (x64), current release\n' +
-      '**Version** — `' + version + '`\n' +
-      '**Source** — open source on [GitHub](' + GITHUB_URL + ')\n' +
-      '**Mac** — coming soon',
+    const platforms = new TextDisplayBuilder().setContent(
+      '**Latest version:** `v' + version + '`\n\n' +
+      'Windows · Windows 10 / 11 (x64)\n' +
+      'macOS · coming soon',
     );
 
-    const pad = (name) => new ButtonBuilder().setCustomId('download:pad:' + name).setLabel('​').setStyle(ButtonStyle.Secondary).setDisabled(true);
-    const downloads = new ActionRowBuilder().addComponents(
-      pad('left'),
-      new ButtonBuilder().setLabel('Download Windows').setStyle(ButtonStyle.Link).setEmoji('🪟').setURL(WINDOWS_URL),
-      new ButtonBuilder().setCustomId('download:mac-soon').setLabel('Mac (coming soon)').setStyle(ButtonStyle.Secondary).setDisabled(true),
-      pad('right'),
+    const buttons = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setLabel('Download Windows')
+        .setStyle(ButtonStyle.Link)
+        .setEmoji('🪟')
+        .setURL(WINDOWS_URL),
+      new ButtonBuilder()
+        .setLabel('Source code')
+        .setStyle(ButtonStyle.Link)
+        .setEmoji('⭐')
+        .setURL(GITHUB_URL),
+      new ButtonBuilder()
+        .setLabel('Website')
+        .setStyle(ButtonStyle.Link)
+        .setEmoji('🌐')
+        .setURL(WEBSITE_URL),
     );
-    const links = new ActionRowBuilder().addComponents(
-      pad('github-left'),
-      new ButtonBuilder().setLabel('GitHub').setStyle(ButtonStyle.Link).setEmoji('⭐').setURL(GITHUB_URL),
-      new ButtonBuilder().setLabel('Website').setStyle(ButtonStyle.Link).setEmoji('🌐').setURL(WEBSITE_URL),
-      pad('github-right'),
+
+    const install = new TextDisplayBuilder().setContent(
+      '## How to install\n' +
+      'Download the `.exe`, open it and follow the installer. Windows 10 or 11 on 64-bit is required.\n\n' +
+      '-# macOS is coming soon. Links update automatically with every new version.',
     );
 
     const container = new ContainerBuilder()
@@ -79,10 +87,11 @@ module.exports = {
       .addMediaGalleryComponents(gallery)
       .addTextDisplayComponents(title)
       .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
-      .addTextDisplayComponents(body)
+      .addTextDisplayComponents(platforms)
       .addSeparatorComponents(new SeparatorBuilder().setDivider(false).setSpacing(SeparatorSpacingSize.Small))
-      .addActionRowComponents(downloads)
-      .addActionRowComponents(links);
+      .addActionRowComponents(buttons)
+      .addSeparatorComponents(new SeparatorBuilder().setDivider(true).setSpacing(SeparatorSpacingSize.Small))
+      .addTextDisplayComponents(install);
 
     await interaction.deferReply();
     const sent = await interaction.channel.send({
