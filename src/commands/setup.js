@@ -1,11 +1,14 @@
 const { MessageFlags, ChannelType, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const store = require('../storage');
 const { buildPanel } = require('../tickets');
+const { welcomeConfig } = require('../welcome');
 const { fail, hasPerm, makeEmbed } = require('../utils');
 
 function settings() {
   return (store.data.settings ??= {});
 }
+
+const WELCOME_THEMES = ['claude', 'gpt', 'gemini', 'grok', 'muse'];
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -29,6 +32,14 @@ module.exports = {
       .setName('autorole')
       .setDescription('Set the role given to members when they join')
       .addRoleOption((option) => option.setName('role').setDescription('Role to assign').setRequired(true)))
+    .addSubcommand((sub) => sub
+      .setName('welcome')
+      .setDescription('Configure the join welcome and leave farewell')
+      .addChannelOption((option) => option.setName('channel').setDescription('Channel to post welcomes and farewells').addChannelTypes(ChannelType.GuildText))
+      .addBooleanOption((option) => option.setName('leave').setDescription('Also post a message when someone leaves').setRequired(false))
+      .addStringOption((option) => option.setName('theme').setDescription('Welcome card theme').addChoices(
+        ...WELCOME_THEMES.map((theme) => ({ name: theme, value: theme })),
+      )))
     .addSubcommand((sub) => sub.setName('panel').setDescription('Post the ticket panel in this channel')),
 
   guildOnly: true,
@@ -44,6 +55,10 @@ module.exports = {
     if (sub === 'show') {
       const mention = (id) => id ? `<#${id}>` : 'not set';
       const role = current.autoRoleId ? `<@&${current.autoRoleId}>` : 'not set';
+      const welcome = welcomeConfig(interaction.guild.id);
+      const welcomeSummary = welcome.enabled
+        ? `${mention(welcome.channelId)}${welcome.leaveEnabled ? ' + leaves' : ''}`
+        : 'disabled';
       return interaction.reply({
         embeds: [makeEmbed('info', 'Server setup', 'These settings belong to this ScoutBot installation.')
           .addFields(
@@ -51,6 +66,7 @@ module.exports = {
             { name: 'AI', value: mention(current.aiChannelId), inline: true },
             { name: 'Commits', value: mention(current.botRepoChannelId), inline: true },
             { name: 'Auto-role', value: role, inline: true },
+            { name: 'Welcome', value: welcomeSummary, inline: true },
           )],
         flags: MessageFlags.Ephemeral,
       });
@@ -79,6 +95,28 @@ module.exports = {
       current.autoRoleId = role.id;
       store.save();
       return interaction.reply({ embeds: [makeEmbed('success', 'Auto-role set', `New members will receive ${role}.`)], flags: MessageFlags.Ephemeral });
+    }
+
+    if (sub === 'welcome') {
+      const cfg = welcomeConfig(interaction.guild.id);
+      const channel = interaction.options.getChannel('channel');
+      const leave = interaction.options.getBoolean('leave');
+      const theme = interaction.options.getString('theme');
+
+      if (channel) cfg.channelId = channel.id;
+      if (leave !== null) cfg.leaveEnabled = leave;
+      if (theme && WELCOME_THEMES.includes(theme)) cfg.theme = theme;
+      store.save();
+
+      const lines = [];
+      if (channel) lines.push(`Welcomes and farewells go to ${channel}.`);
+      if (leave !== null) lines.push(leave ? 'Leave farewells are on.' : 'Leave farewells are off.');
+      if (theme) lines.push(`Welcome card theme is \`${theme}\`.`);
+      lines.push(`Join welcomes are ${cfg.enabled ? 'on' : 'off'}.`);
+      return interaction.reply({
+        embeds: [makeEmbed('success', 'Welcome updated', lines.join(' '))],
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     await interaction.channel.send(buildPanel(interaction.guild));

@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { requireGuild, handleError } = require('../utils');
+const { fail } = require('../utils');
 const radio = require('../radio');
 
 function voiceChannelOf(interaction) {
@@ -22,35 +22,29 @@ module.exports = {
     .addSubcommand((sub) => sub.setName('stop').setDescription('Stop the radio and leave the voice channel'))
     .addSubcommand((sub) => sub.setName('now').setDescription('Show what is playing')),
 
+  guildOnly: true,
+
   async execute(interaction) {
-    if (!(await requireGuild(interaction))) return;
     const sub = interaction.options.getSubcommand();
     await interaction.deferReply();
     try {
       if (sub === 'play') {
         const track = await radio.start(interaction.guild, voiceChannelOf(interaction), interaction.options.getString('query'));
-        await interaction.editReply(`Playing **${track.title}** in ${interaction.member.voice.channel}.`);
-        return;
+        return interaction.editReply(`Now playing **${track.title}** in ${interaction.member.voice.channel}.`);
       }
       if (sub === 'pause') {
-        const paused = radio.pause(interaction.guild.id);
-        await interaction.editReply(paused ? 'Paused.' : 'Nothing is playing.');
-        return;
+        return interaction.editReply(radio.pause(interaction.guild.id) ? 'Paused.' : 'Nothing is playing.');
       }
       if (sub === 'resume') {
-        const resumed = radio.resume(interaction.guild.id);
-        await interaction.editReply(resumed ? 'Resumed.' : 'Nothing is paused.');
-        return;
+        return interaction.editReply(radio.resume(interaction.guild.id) ? 'Resumed.' : 'Nothing is paused.');
       }
       if (sub === 'stop') {
-        const stopped = await radio.stop(interaction.guild);
-        await interaction.editReply(stopped ? 'Stopped and left the voice channel.' : 'The radio is not playing.');
-        return;
+        return interaction.editReply((await radio.stop(interaction.guild)) ? 'Stopped and left the voice channel.' : 'The radio is not playing.');
       }
       const track = radio.nowPlaying(interaction.guild.id);
-      await interaction.editReply(track ? `Now playing **${track.title}**.` : 'Nothing is playing.');
+      return interaction.editReply(track ? `Now playing **${track.title}**.` : 'Nothing is playing.');
     } catch (error) {
-      await handleError(interaction, error);
+      await fail(interaction, error.message || 'Could not play the radio.');
     }
   },
 };
