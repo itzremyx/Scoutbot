@@ -3,7 +3,7 @@ const ai = require('./ai');
 const memory = require('./memory');
 const config = require('./config');
 const { splitText, makeEmbed, fail } = require('./utils');
-const snipe = require('../snipe');
+const snipe = require('./snipe');
 
 // Phrases that usually mean the admin wants a standing rule kept, not a one-off question.
 const INSTRUCTION_HINT = /\b(remember|from now on|going forward|always|never|don'?t ever|make sure|rule|please (?:do )?(?:not )?(?:use|call|say|reply|answer|speak))\b/i;
