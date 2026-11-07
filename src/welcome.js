@@ -1,6 +1,6 @@
 const { AttachmentBuilder, PermissionFlagsBits } = require('discord.js');
 const store = require('./storage');
-const { renderWelcomeCard } = require('./welcomecard');
+const { renderWelcomeCard, renderFarewellCard } = require('./welcomecard');
 
 // code -> { uses, inviterId }. Compared before and after a join to find who invited the member.
 const inviteCache = new Map();
@@ -89,15 +89,26 @@ async function welcomeMember(guild, member) {
     .catch(() => {});
 }
 
-// Farewell is plain text: the member is gone, so no card.
+// Farewell card mirrors the welcome card. memberCount is the count after the member has left.
 async function farewellMember(guild, user) {
   const cfg = welcomeConfig(guild.id);
   if (!cfg.leaveEnabled) return;
   const channel = channelFor(guild, cfg);
   if (!channel?.isTextBased()) return;
+  const levelsTheme = store.guild(guild.id).levels?.theme;
+  const username = user.globalName ?? user.username ?? 'A member';
+  const png = await renderFarewellCard({
+    username,
+    avatarUrl: user.displayAvatarURL({ extension: 'png', size: 256 }),
+    themeId: cfg.theme ?? levelsTheme ?? 'claude',
+    memberCount: guild.memberCount,
+  }).catch(() => null);
+  const files = png ? [new AttachmentBuilder(png, { name: 'farewell.png' })] : [];
   await channel
     .send({
-      content: (user.globalName ?? user.username ?? 'A member') + ' left ' + guild.name + '.',
+      files,
+      content: username + ' left ' + guild.name + ' — ' + guild.memberCount + ' members left.',
+      allowedMentions: { parse: [] },
     })
     .catch(() => {});
 }

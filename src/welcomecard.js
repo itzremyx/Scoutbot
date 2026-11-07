@@ -109,4 +109,64 @@ async function renderWelcomeCard({ username, avatarUrl, themeId, memberCount, jo
   return canvas.encode('png');
 }
 
-module.exports = { renderWelcomeCard };
+// Farewell card for a member who left. Same frame as the welcome card, but no inviter line:
+// memberCount is the count after the member has left.
+async function renderFarewellCard({ username, avatarUrl, themeId, memberCount }) {
+  const theme = THEMES[themeId] ?? THEMES.claude;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+
+  drawEditorFrame(ctx, W, H, 'farewell.ts', theme);
+
+  const lines = [
+    [['// Scoutcode Farewell', SYNTAX.comment]],
+    [['const', SYNTAX.keyword], [' member', SYNTAX.name], [' = ', SYNTAX.punct], [JSON.stringify(shorten(username, 20)), SYNTAX.string], [';', SYNTAX.punct]],
+    [['const', SYNTAX.keyword], [' memberCount', SYNTAX.name], [' = ', SYNTAX.punct], [String(memberCount ?? 0), SYNTAX.number], [';', SYNTAX.punct]],
+    [['const', SYNTAX.keyword], [' status', SYNTAX.name], [' = ', SYNTAX.punct], ['"left"', SYNTAX.string], [';', SYNTAX.punct]],
+  ];
+  lines.forEach((tokens, i) => {
+    const y = 104 + i * 30;
+    ctx.font = FONT;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = SYNTAX.gutter;
+    ctx.fillText(String(i + 1), 64, y);
+    drawTokens(ctx, 92, y, tokens);
+  });
+
+  const cx = 748;
+  const cy = 124;
+  const r = 56;
+  const avatar = await loadAvatar(avatarUrl);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  if (avatar) {
+    ctx.drawImage(avatar, cx - r, cy - r, r * 2, r * 2);
+  } else {
+    ctx.fillStyle = theme.accent;
+    ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    ctx.font = '48px Consolas, "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#1e1e1e';
+    ctx.fillText((username[0] ?? '?').toUpperCase(), cx, cy + 16);
+  }
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+  ctx.strokeStyle = theme.accent;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.font = TEXT_FONT;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = SYNTAX.text;
+  ctx.fillText(shorten(username, 14), cx, 218);
+  ctx.fillStyle = theme.accent;
+  ctx.fillText(`${memberCount ?? 0} members left`, cx, 248);
+
+  return canvas.encode('png');
+}
+
+module.exports = { renderWelcomeCard, renderFarewellCard };
