@@ -585,6 +585,10 @@ async function onInviteCreate(invite) {
     ['Temporary', invite.temporary ? 'Yes' : 'No', true],
     ['URL', invite.url],
   ]);
+  // Increment invite counter in welcome config
+  const wcfg = store.guild(guild.id).welcome;
+  wcfg.inviteCount = (wcfg.inviteCount ?? 0) + 1;
+  store.save();
 }
 
 async function onInviteDelete(invite) {
@@ -596,6 +600,10 @@ async function onInviteDelete(invite) {
     ['Channel', invite.channelId ? `<#${invite.channelId}>` : null, true],
     ['Deleted by', byEntry(entry), true],
   ]);
+  // Increment invite counter in welcome config
+  const wcfg = store.guild(guild.id).welcome;
+  wcfg.inviteCount = (wcfg.inviteCount ?? 0) + 1;
+  store.save();
 }
 
 async function onEmojiCreate(emoji) {

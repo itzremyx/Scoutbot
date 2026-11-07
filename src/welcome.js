@@ -6,7 +6,7 @@ const { renderWelcomeCard } = require('./welcomecard');
 // theme: null means "use the levels theme", so the cards stay in the same visual language.
 function welcomeConfig(guildId) {
   const guild = store.guild(guildId);
-  guild.welcome ??= { enabled: true, leaveEnabled: false, channelId: null, theme: null };
+  guild.welcome ??= { enabled: true, leaveEnabled: false, channelId: null, theme: null, inviteCount: 0 };
   return guild.welcome;
 }
 

@@ -30,8 +30,10 @@ function guild(guildId) {
       tickets: {},
       warnings: {},
       nextWarningId: 1,
-      instructions: [],
+      invitations: [],
       nextInstructionId: 1,
+      welcome: { enabled: true, leaveEnabled: false, channelId: null, theme: null, inviteCount: 0 },
+      inviteTracker: { channelId: null, inviteCount: 0 },
     };
   }
   return data.guilds[guildId];
