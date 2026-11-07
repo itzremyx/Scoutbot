@@ -79,7 +79,8 @@ module.exports = {
 
       await dmUser(user, makeEmbed('error', `You were kicked from ${interaction.guild.name}`, `**Reason:** ${reason}`));
       await member.kick(`${reason} (by ${interaction.user.username})`);
-      await logModeration(interaction, 'kick', 'Member kicked', user.id, reason);
+      // History only: the channel log is posted by the member-leave handler, which sees the same kick.
+      addModlogEntry(interaction.guild.id, { userId: user.id, action: 'kick', reason, moderatorId: interaction.user.id });
       return interaction.reply({
         embeds: [makeEmbed('success', 'Member kicked', `<@${user.id}> was kicked.\n**Reason:** ${reason}`)],
       });
