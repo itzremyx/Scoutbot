@@ -135,10 +135,12 @@ function register(client) {
 
 
 
+    // question is null when the message was not meant for the bot (no mention, no reply to it,
+    // not the AI channel) — stay silent instead of pinging back in every channel. This also
+    // means images are only analyzed when the message is addressed to the bot, never on their own.
+    if (question === null) return;
+
     if (!question && !imageUrls.length) {
-      // question is null when the message was not meant for the bot (no mention, no reply to it,
-      // not the AI channel) — stay silent instead of pinging back in every channel.
-      if (question === null) return;
       const hint = 'Yes? Ask me something or attach an image.';
       await (isDM ? message.channel.send(hint) : message.reply(hint)).catch(() => {});
       return;
