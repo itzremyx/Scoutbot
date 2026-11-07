@@ -10,7 +10,7 @@ const { isBotOwner, makeEmbed } = require('./utils');
 
 const CATEGORIES = {
   moderation: { label: 'Moderation', emoji: String.fromCodePoint(0x1F6E1), description: 'Kick, ban, timeouts, warnings and moderation history', commands: ['kick', 'ban', 'unban', 'timeout', 'untimeout', 'warn', 'unwarn', 'warnings', 'automod', 'modlog'] },
-  channels: { label: 'Channels', emoji: String.fromCodePoint(0x1F4AC), description: 'Purge, slowmode, locks, sticky messages and polls', commands: ['purge', 'slowmode', 'lock', 'unlock', 'sticky', 'poll'] },
+  channels: { label: 'Channels', emoji: String.fromCodePoint(0x1F4AC), description: 'Purge, slowmode, locks, sticky messages and polls', commands: ['purge', 'purge-user-time', 'slowmode', 'lock', 'unlock', 'sticky', 'poll'] },
   levels: { label: 'Levels', emoji: String.fromCodePoint(0x1F4C8), description: 'XP, rank cards and leaderboard', commands: ['rank', 'leaderboard', 'xp', 'levels'] },
   giveaways: { label: 'Giveaways', emoji: String.fromCodePoint(0x1F389), description: 'Start and manage giveaways', commands: ['giveaway'] },
   backups: { label: 'Backups', emoji: String.fromCodePoint(0x1F4BE), description: 'Save and restore roles and channels', commands: ['backup'] },
