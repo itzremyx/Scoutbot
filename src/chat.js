@@ -61,7 +61,8 @@ function imageUrlsOf(message) {
 // Message handler for chat replies: mentions, replies and AI channel in servers, plain conversation in DMs.
 function register(client) {
   client.on(Events.MessageCreate, async (message) => {
-
+    // Never react to the bot's own messages (prevents self-reply loops).
+    if (message.author.bot) return;
 
     // Determine if this is a DM, get the question text and any image URLs.
     const isDM = !message.guild;
