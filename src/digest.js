@@ -1,10 +1,9 @@
-const { PermissionFlagsBits } = require('discord.js');
 const store = require('./storage');
 const { makeEmbed } = require('./utils');
 
 // Weekly server digest: joins, leaves, moderation actions, XP and invites, posted to the
-// configured channel every Monday at 09:00 UTC. The chosen channel id lives on the guild record
-// (weeklyDigestChannelId) so it can be changed at runtime without deploys.
+// configured channel every Monday at 09:00 UTC. Joins/leaves are week counters, reset after
+// each post; moderation is filtered by timestamp since the last post.
 
 // Actions considered "moderation" for the digest (warn/kick/ban/timeout, logged by src/modlog.js).
 const MOD_ACTIONS = new Set(['warn', 'automod', 'kick', 'ban', 'timeout']);
@@ -14,8 +13,6 @@ const DIGEST_DAY = 1; // Monday (0 = Sunday)
 const DIGEST_HOUR = 9; // 09:00 UTC
 const DIGEST_MINUTE = 0;
 const MAX_INVITERS = 5;
-
-const DAY_LABEL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const ACTION_LABEL = {
   warn: 'Warnings',
@@ -43,7 +40,8 @@ async function postDigest(guild) {
   const members = guild.memberCount;
   const joins = g.joins ?? 0;
   const leaves = g.leaves ?? 0;
-  const modlog = (g.modlog?.entries ?? []).filter((e) => MOD_ACTIONS.has(e.action));
+  const since = cfg.lastPostedAt ?? 0;
+  const modlog = (g.modlog?.entries ?? []).filter((e) => MOD_ACTIONS.has(e.action) && (e.at ?? 0) >= since);
 
   const lines = [`**Members:** ${members}`, `**Joined this week:** ${joins}`, `**Left this week:** ${leaves}`];
 
@@ -72,6 +70,9 @@ async function postDigest(guild) {
   const embed = makeEmbed('info', 'Weekly digest', `Server stats for <t:${ts}:R>\n${lines.join('\n')}`);
   const sent = await channel.send({ embeds: [embed] }).catch(() => null);
   if (sent) {
+    // Counters are week-scoped: reset after a successful post so "this week" never accumulates.
+    g.joins = 0;
+    g.leaves = 0;
     cfg.lastPostedAt = Date.now();
     store.save();
   }
