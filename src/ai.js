@@ -218,9 +218,9 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
 
   let activeModelName = model;
   let forcedTool = false;
-  // Same endpoint and key serve the fallback model (MiniMax-M3.1-Flash). It takes over whenever
-  // the primary model fails for any reason: rejected/renamed model, timeout, rate limit, outage,
-  // even a dropped connection — one switch per request is enough.
+  // The same endpoint and key serve a distinct fallback model (AI_MODEL_FALLBACK). It takes over
+  // whenever the primary model fails for any reason: rejected/renamed model, timeout, rate limit,
+  // outage, even a dropped connection — one switch per request is enough.
   const fallbackName = config.ai.fallbackModel;
   let fallbackUsed = !fallbackName || fallbackName === activeModelName;
 
