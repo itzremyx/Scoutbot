@@ -1,5 +1,6 @@
-const { MessageFlags, SlashCommandBuilder } = require('discord.js');
+const { AttachmentBuilder, MessageFlags, SlashCommandBuilder } = require('discord.js');
 const { levelsConfig, progressOf, rankOf } = require('../levels');
+const { renderLeaderboardCard } = require('../rankcard');
 const { makeEmbed } = require('../utils');
 
 module.exports = {
@@ -16,12 +17,18 @@ module.exports = {
       return interaction.reply({ embeds: [makeEmbed('info', 'Leaderboard', 'Nobody has XP yet.')], flags: MessageFlags.Ephemeral });
     }
 
-    const lines = top.map(([id, user], i) => {
+    const entries = await Promise.all(top.map(async ([id, user]) => {
       const { level } = progressOf(user.xp);
-      return `**${i + 1}.** <@${id}>: level ${level} (${user.xp} XP, rank #${rankOf(cfg, id)})`;
-    });
+      const member = await interaction.guild.members.fetch(id).catch(() => null);
+      const username = member ? (member.user.globalName ?? member.user.username) : 'Unknown';
+      return { id, username, level, xp: user.xp };
+    }));
+
+    const png = await renderLeaderboardCard({ entries, themeId: cfg.theme });
+    const file = new AttachmentBuilder(png, { name: 'leaderboard.png' });
     return interaction.reply({
-      embeds: [makeEmbed('info', 'Leaderboard', lines.join('\n'))],
+      files: [file],
+      content: `**Leaderboard** — top ${entries.length}`,
       allowedMentions: { parse: [] },
     });
   },

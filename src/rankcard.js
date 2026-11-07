@@ -253,4 +253,47 @@ async function renderRankCard({ username, avatarUrl, themeId, level, xp, floor, 
   return canvas.encode('png');
 }
 
-module.exports = { renderRankCard, THEME_CHOICES, formatDuration, drawEditorFrame, THEMES };
+// Renders a leaderboard card showing the top members by XP. Taller than the rank card so it can
+// hold a full top-10 without cramping; same editor chrome and theme.
+const LB_W = 900;
+const LB_H = 560;
+
+async function renderLeaderboardCard({ entries, themeId }) {
+  const theme = THEMES[themeId] ?? THEMES.claude;
+  const canvas = createCanvas(LB_W, LB_H);
+  const ctx = canvas.getContext('2d');
+  drawEditorFrame(ctx, LB_W, LB_H, 'leaderboard.ts', theme);
+
+  const top = entries.slice(0, 10);
+  const lines = [
+    [['// Scoutcode Leaderboard', SYNTAX.comment]],
+    [['const', SYNTAX.keyword], [' topTen', SYNTAX.name], [' = ', SYNTAX.punct], ['[', SYNTAX.punct]],
+  ];
+  top.forEach((entry, i) => {
+    const name = shorten(entry.username, 12);
+    const row = `${i + 1}. ${name} — Lv ${entry.level} · ${entry.xp} XP`;
+    const last = i === top.length - 1;
+    lines.push([
+      [JSON.stringify(row), SYNTAX.string],
+      [last ? ';' : ',', SYNTAX.punct],
+    ]);
+  });
+  lines.push([
+    ['];', SYNTAX.punct],
+    ['// server XP totals', SYNTAX.comment],
+  ]);
+
+  // Fit the array rows by using a smaller line height for the list itself.
+  lines.forEach((tokens, i) => {
+    const y = 96 + i * 34;
+    ctx.font = FONT;
+    ctx.textAlign = 'right';
+    ctx.fillStyle = SYNTAX.gutter;
+    ctx.fillText(String(i + 1), 64, y);
+    drawTokens(ctx, 92, y, tokens);
+  });
+
+  return canvas.encode('png');
+}
+
+module.exports = { renderRankCard, renderLeaderboardCard, THEME_CHOICES, formatDuration, drawEditorFrame, THEMES };
