@@ -47,6 +47,29 @@ test('parseCommit splits subject/body and drops Co-Authored-By trailers', () => 
   assert.strictEqual(parsed.githubAuthor, null);
 });
 
+test('botrepo.parseAtom reads the commit Atom feed like the REST API', () => {
+  const xml = [
+    '<feed>',
+    '<entry><id>tag:github.com,2008:Grit::Commit/' + 'b'.repeat(40) + '</id>',
+    '<updated>2026-11-07T21:44:29Z</updated>',
+    '<author><name></name><email>dev@example.com</email></author>',
+    '<content type="html">&lt;pre&gt;Only analyze images when the bot is addressed&lt;/pre&gt;</content></entry>',
+    '<entry><id>tag:github.com,2008:Grit::Commit/' + 'a'.repeat(40) + '</id>',
+    '<updated>2026-11-07T21:37:05Z</updated>',
+    '<content type="html">&lt;pre&gt;Fix &amp;amp; ship&lt;/pre&gt;</content></entry>',
+    '</feed>',
+  ].join('');
+  const list = botrepo.parseAtom(xml);
+  assert.strictEqual(list.length, 2);
+  const parsed = botrepo.parseCommit(list[0]);
+  assert.strictEqual(parsed.short, 'b'.repeat(7));
+  assert.strictEqual(parsed.subject, 'Only analyze images when the bot is addressed');
+  assert.ok(parsed.url.endsWith('b'.repeat(40)));
+  assert.strictEqual(botrepo.parseCommit(list[1]).subject, 'Fix & ship');
+  // newest first, like the REST API, so newCommits keeps working on either source
+  assert.deepStrictEqual(botrepo.newCommits(list, 'a'.repeat(40)).map((c) => c.sha), ['b'.repeat(40)]);
+});
+
 test('updates.parseCommit matches botrepo.parseCommit shape', () => {
   const commit = makeList(1)[0];
   const p = updates.parseCommit(commit);

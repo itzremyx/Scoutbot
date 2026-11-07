@@ -63,6 +63,18 @@ async function fetchCommits() {
     console.warn('BotRepo: local git log unavailable; using the public GitHub API');
   }
 
+  // The API returns richer data but costs quota: 60 requests an hour per IP without a token,
+  // and a revoked token answers 401 even for a public repo. Every failure falls back to the
+  // commit Atom feed, which has no rate limit, so a commit is never missed over a 403.
+  try {
+    return await fetchApiCommits();
+  } catch (err) {
+    console.warn('BotRepo: ' + err.message + '; reading the commit Atom feed instead');
+  }
+  return fetchAtomCommits();
+}
+
+async function fetchApiCommits() {
   // The repo is public, so a token is optional. A bad token makes GitHub answer 401 even for a
   // public repo, which is worse than sending no token at all.
   const response = await fetch(
@@ -102,6 +114,52 @@ async function fetchCommits() {
   }
   commitsEtag = response.headers.get('etag');
   return response.json();
+}
+
+function decodeXml(text) {
+  return String(text)
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+// Turns https://github.com/OWNER/REPO/commits/BRANCH.atom into the same commit shape the
+// REST API returns, so newCommits/parseCommit work unchanged on either source.
+function parseAtom(xml) {
+  return String(xml).split('<entry>').slice(1).map((chunk) => {
+    const entry = chunk.split('</entry>')[0];
+    const tag = (name) => {
+      const match = entry.match(new RegExp('<' + name + '[^>]*>([\\s\\S]*?)</' + name + '>'));
+      return match ? decodeXml(match[1]).trim() : '';
+    };
+    const sha = (tag('id').match(/Commit\/([0-9a-f]{40})/i) || [])[1] || '';
+    // The feed escapes the message twice: once for XML and once inside the HTML <pre> wrapper,
+    // so decode after stripping the tags to turn &amp;amp; back into &.
+    const message = decodeXml(tag('content').replace(/<[^>]*>/g, '').trim()) || tag('title');
+    const date = tag('updated') || null;
+    return {
+      sha,
+      html_url: 'https://github.com/' + REPO + '/commit/' + sha,
+      commit: {
+        message,
+        author: { name: tag('name') || 'unknown', date },
+        committer: { date },
+      },
+    };
+  }).filter((commit) => commit.sha);
+}
+
+async function fetchAtomCommits() {
+  const response = await fetch('https://github.com/' + REPO + '/commits/' + BRANCH + '.atom', {
+    headers: { Accept: 'application/atom+xml', 'User-Agent': 'Scoutbot' },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw new Error('GitHub ' + response.status + ' for ' + REPO + ' (atom feed)');
+  return parseAtom(await response.text()).slice(0, MAX_COMMITS_PER_RUN);
 }
 
 function newCommits(list, lastSha) {
@@ -310,4 +368,4 @@ async function recentCommits(count = 10) {
   return Promise.all(list.slice(0, Math.max(1, count)).map(enrichCommit));
 }
 
-module.exports = { register, checkOnce, parseCommit, commitEmbed, newCommits, recentCommits };
+module.exports = { register, checkOnce, parseCommit, parseAtom, commitEmbed, newCommits, recentCommits };
