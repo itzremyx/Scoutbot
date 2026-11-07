@@ -22,38 +22,29 @@ function rankers(guildId) {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('invites')
-    .setDescription('View and manage invite stats')
-    .addSubcommand((sub) =>
-      sub.setName('show')
-        .setDescription('Show invite stats for a member')
-        .addUserOption((opt) => opt.setName('user').setDescription('Member to look up')),
+    .setDescription('Show and manage invite stats')
+    .addUserOption((opt) => opt.setName('user').setDescription('Member to look up (defaults to you)'))
+    .addStringOption((opt) =>
+      opt.setName('action')
+        .setDescription('Manage invites (requires Manage Server)')
+        .addChoices(
+          { name: 'Add invites', value: 'add' },
+          { name: 'Remove invites', value: 'remove' },
+          { name: 'Reset all invites', value: 'reset' },
+        ),
     )
-    .addSubcommand((sub) =>
-      sub.setName('add')
-        .setDescription('Add fake invites to a member')
-        .addUserOption((opt) => opt.setName('user').setDescription('Member to modify').setRequired(true))
-        .addIntegerOption((opt) => opt.setName('count').setDescription('Number of invites to add').setRequired(true)),
-    )
-    .addSubcommand((sub) =>
-      sub.setName('remove')
-        .setDescription('Remove invites from a member')
-        .addUserOption((opt) => opt.setName('user').setDescription('Member to modify').setRequired(true))
-        .addIntegerOption((opt) => opt.setName('count').setDescription('Number of invites to remove').setRequired(true)),
-    )
-    .addSubcommand((sub) =>
-      sub.setName('reset')
-        .setDescription('Reset all invite stats for this server'),
-    ),
+    .addIntegerOption((opt) => opt.setName('count').setDescription('Number of invites to add/remove')),
 
   guildOnly: true,
 
   async execute(interaction) {
-    const sub = interaction.options.getSubcommand();
+    const action = interaction.options.getString('action');
     const guildId = interaction.guild.id;
     const guildData = store.guild(guildId);
-    await interaction.deferReply({ ephemeral: sub !== 'show' });
 
-    if (sub === 'show') {
+    // Without an action this is a plain lookup: /invites shows your own invites,
+    // /invites user:@X shows a member's invites.
+    if (!action) {
       const target = interaction.options.getUser('user') ?? interaction.user;
       const rankersAll = rankers(guildId);
       const entry = rankersAll.find((item) => item.inviterId === target.id);
@@ -76,35 +67,52 @@ module.exports = {
         rows.length ? rows.join('\n') : 'No invites recorded yet.',
       );
       if (top.length) embed.addFields({ name: 'Leaderboard', value: truncate(top.join('\n'), 1024) });
-      await interaction.editReply({ embeds: [embed] });
-    } else if (sub === 'add' || sub === 'remove') {
-      if (!hasPerm(interaction, PermissionFlagsBits.ManageGuild)) {
-        return interaction.editReply({
-          embeds: [makeEmbed('error', 'Permission denied', 'You need Manage Server permission to modify invites.')],
-        });
-      }
-      const user = interaction.options.getUser('user', true);
-      const count = interaction.options.getInteger('count');
-      const entry = (guildData.invites ??= {})[user.id] ??= { regular: 0, leaves: 0 };
-      if (sub === 'add') {
-        entry.regular += count;
-        await interaction.editReply({ embeds: [makeEmbed('success', 'Invites added', `${count} invites added to ${user.username}.`)] });
-      } else {
-        const newVal = Math.max(0, entry.regular - count);
-        const removed = entry.regular - newVal;
-        entry.regular = newVal;
-        await interaction.editReply({ embeds: [makeEmbed('success', 'Invites removed', `${removed} invites removed from ${user.username}.`)] });
-      }
-      store.save();
-    } else if (sub === 'reset') {
-      if (!hasPerm(interaction, PermissionFlagsBits.ManageGuild)) {
-        return interaction.editReply({
-          embeds: [makeEmbed('error', 'Permission denied', 'You need Manage Server permission to reset invites.')],
-        });
-      }
+      return interaction.reply({ embeds: [embed] });
+    }
+
+    // Management actions (add / remove / reset) require Manage Server.
+    if (!hasPerm(interaction, PermissionFlagsBits.ManageGuild)) {
+      return interaction.reply({
+        embeds: [makeEmbed('error', 'Permission denied', 'You need Manage Server permission to modify invites.')],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    if (action === 'reset') {
       guildData.invites = {};
       store.save();
-      await interaction.editReply({ embeds: [makeEmbed('success', 'Invites reset', 'All invite statistics have been cleared.')] });
+      return interaction.reply({
+        embeds: [makeEmbed('success', 'Invites reset', 'All invite statistics have been cleared.')],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const user = interaction.options.getUser('user');
+    if (!user) {
+      return interaction.reply({
+        embeds: [makeEmbed('error', 'Member required', `Use the \`user\` option to pick who to ${action} invites for.`)],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    const count = interaction.options.getInteger('count') ?? 1;
+    const entry = (guildData.invites ??= {})[user.id] ??= { regular: 0, leaves: 0 };
+    if (action === 'add') {
+      entry.regular += count;
+      store.save();
+      return interaction.reply({
+        embeds: [makeEmbed('success', 'Invites added', `${count} invite${count === 1 ? '' : 's'} added to ${user.username}.`)],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    if (action === 'remove') {
+      const newVal = Math.max(0, entry.regular - count);
+      const removed = entry.regular - newVal;
+      entry.regular = newVal;
+      store.save();
+      return interaction.reply({
+        embeds: [makeEmbed('success', 'Invites removed', `${removed} invite${removed === 1 ? '' : 's'} removed from ${user.username}.`)],
+        flags: MessageFlags.Ephemeral,
+      });
     }
   },
 };
