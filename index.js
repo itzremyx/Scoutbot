@@ -67,7 +67,8 @@ function friendlyError(err) {
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
   await presence.apply(c);
-  const count = await loader.registerCommands(c);
+  const GUILD_ID = "1565465623910424586";
+  const count = await loader.registerCommands(c, GUILD_ID);
   console.log(`Registered ${count} slash commands. Global commands can take up to an hour to show up.`);
   giveaways.startScheduler(c);
   levels.startScheduler(c);

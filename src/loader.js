@@ -36,12 +36,16 @@ const commandCount = () => commands.size;
 const allCommands = () => [...commands.values()];
 const handleComponent = (interaction) => components.handleComponent(interaction);
 
-async function registerCommands(client) {
+async function registerCommands(client, guildId) {
   const payload = commands.map((command) => command.data.toJSON());
-  await client.application.commands.set(payload);
+  if (guildId) {
+    const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId);
+    await guild.commands.set(payload);
+  } else {
+    await client.application.commands.set(payload);
+  }
   return payload.length;
 }
-
 // Reloads command files and their helpers from disk, then re-registers the slash commands.
 // If anything fails to load, the previous commands stay active and the error is thrown.
 async function reload(client) {
