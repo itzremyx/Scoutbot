@@ -46,18 +46,22 @@ async function loadAvatar(url) {
 }
 
 // Welcome card for a member who joined: member, member count, join date. Same frame as rank.ts.
-async function renderWelcomeCard({ username, avatarUrl, themeId, memberCount, joinDate }) {
+async function renderWelcomeCard({ username, avatarUrl, themeId, memberCount, joinDate, invitedBy = null }) {
   const theme = THEMES[themeId] ?? THEMES.claude;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
   drawEditorFrame(ctx, W, H, 'welcome.ts', theme);
 
+  const inviterValue = invitedBy
+    ? [JSON.stringify(`${shorten(invitedBy.tag, 16)} (${invitedBy.count})`), SYNTAX.string]
+    : ['null', SYNTAX.keyword];
   const lines = [
     [['// Scoutcode Welcome', SYNTAX.comment]],
     [['const', SYNTAX.keyword], [' member', SYNTAX.name], [' = ', SYNTAX.punct], [JSON.stringify(shorten(username, 20)), SYNTAX.string], [';', SYNTAX.punct]],
     [['const', SYNTAX.keyword], [' memberCount', SYNTAX.name], [' = ', SYNTAX.punct], [String(memberCount ?? 0), SYNTAX.number], [';', SYNTAX.punct]],
     [['const', SYNTAX.keyword], [' joined', SYNTAX.name], [' = ', SYNTAX.punct], [JSON.stringify(formatDate(joinDate)), SYNTAX.string], [';', SYNTAX.punct]],
+    [['const', SYNTAX.keyword], [' invitedBy', SYNTAX.name], [' = ', SYNTAX.punct], inviterValue, [';', SYNTAX.punct]],
   ];
   lines.forEach((tokens, i) => {
     const y = 104 + i * 30;
