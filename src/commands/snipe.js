@@ -7,6 +7,7 @@ module.exports = {
     .setName('snipe')
     .setDescription('Show the last deleted message in this channel')
     .setDMPermission(false)
+    .addSubcommand((sub) => sub.setName('show').setDescription('Show the sniped message'))
     .addSubcommand((sub) => sub.setName('clear').setDescription('Clear the sniped message (managers)')),
 
   guildOnly: true,

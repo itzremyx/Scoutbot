@@ -2,7 +2,8 @@ const { Events, PermissionFlagsBits } = require('discord.js');
 const ai = require('./ai');
 const memory = require('./memory');
 const config = require('./config');
-const { splitText } = require('./utils');
+const { splitText, makeEmbed, fail } = require('./utils');
+const snipe = require('../snipe');
 
 // Phrases that usually mean the admin wants a standing rule kept, not a one-off question.
 const INSTRUCTION_HINT = /\b(remember|from now on|going forward|always|never|don'?t ever|make sure|rule|please (?:do )?(?:not )?(?:use|call|say|reply|answer|speak))\b/i;
@@ -60,11 +61,49 @@ function imageUrlsOf(message) {
 // Message handler for chat replies: mentions, replies and AI channel in servers, plain conversation in DMs.
 function register(client) {
   client.on(Events.MessageCreate, async (message) => {
-    if (message.author.bot) return;
-    const isDM = !message.guild;
-    const question = await questionOf(message, client);
-    if (question === null) return;
-    const imageUrls = imageUrlsOf(message);
+
+
+    // Message handler for chat replies: mentions, replies and AI channel in servers, plain conversation in DMs.
+    // Prefix command handling (e.g. "-snipe")
+    const raw = message.content?.trim() ?? '';
+    if (raw.startsWith('-')) {
+      const [cmd, ...args] = raw.slice(1).trim().split(/\s+/);
+      if (cmd.toLowerCase() === 'snipe') {
+        const sub = args[0] ? args[0].toLowerCase() : null;
+        if (sub === 'clear') {
+          if (!message.member?.permissions?.has(PermissionFlagsBits.ManageMessages)) {
+            await message.reply('You need Manage Messages permission to clear the snipe.').catch(() => {});
+            return;
+          }
+          if (!snipe.clear(message.channel.id)) {
+            await message.reply('There is no sniped message in this channel yet.').catch(() => {});
+            return;
+          }
+          await message.reply('The sniped message for this channel has been forgotten.').catch(() => {});
+          return;
+        }
+        const captured = snipe.peek(message.channel.id);
+        if (!captured) {
+          await message.reply('No message has been deleted in this channel since I started watching.').catch(() => {});
+          return;
+        }
+        const author = captured.author;
+        const age = Math.max(0, Math.round((Date.now() - captured.at) / 1000));
+        const body = [captured.content,
+          ...captured.attachments.map((file) => `[attachment: ${file.name}](${file.url})`),
+          ...captured.embeds.filter((embed) => embed.url).map((embed) => `[embed](${embed.url})`)
+        ].filter(Boolean).join('\n');
+        const embed = makeEmbed('info', 'Deleted message', body || '*The message had no text or attachments.*')
+          .setAuthor({ name: `${author.username ?? 'Unknown'}${author.tag ? ` (${author.tag})` : ''}`, iconURL: null })
+          .addFields({ name: 'Deleted', value: `${age}s ago`, inline: true }, { name: 'Channel', value: `${message.channel}`, inline: true });
+        if (captured.url) embed.setFooter({ text: captured.url });
+        await message.channel.send({ embeds: [embed] }).catch(() => {});
+        return;
+      }
+    }
+
+
+
 
     if (!question && !imageUrls.length) {
       const hint = 'Yes? Ask me something or attach an image.';
