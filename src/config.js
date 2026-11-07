@@ -56,7 +56,7 @@ function buildConfig() {
       youtubeCookies: process.env.YOUTUBE_COOKIES || '',
       cookiesFile: process.env.YTDLP_COOKIES_FILE || '',
     },
-    dataFile: path.join(__dirname, '..', 'data', 'store.json'),
+    dataFile: process.env.SCOUT_DATA_FILE || path.join(__dirname, '..', 'data', 'store.json'),
     transcriptDir: path.join(__dirname, '..', 'data', 'transcripts'),
   };
 }

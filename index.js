@@ -16,6 +16,7 @@ const databackup = require('./src/databackup');
 const autorole = require('./src/autorole');
 const welcome = require('./src/welcome');
 const snipe = require('./src/snipe');
+const digest = require('./src/digest');
 const { fail, isBotOwner } = require('./src/utils');
 
 if (!config.token) {
@@ -53,6 +54,7 @@ autorole.register(client);
 welcome.register(client);
 snipe.register(client);
 stickies.register(client);
+digest.register(client);
 
 function friendlyError(err) {
   if (err.code === 50013) return 'I am missing the permissions needed for this action.';
@@ -70,6 +72,7 @@ client.once(Events.ClientReady, async (c) => {
   giveaways.startScheduler(c);
   levels.startScheduler(c);
   reminders.startScheduler(c);
+  digest.startScheduler(c);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
