@@ -32,6 +32,7 @@ function guild(guildId) {
       nextWarningId: 1,
       invitations: [],
       nextInstructionId: 1,
+      invites: [],
       welcome: { enabled: true, leaveEnabled: false, channelId: null, theme: null, inviteCount: 0 },
       inviteTracker: { channelId: null, inviteCount: 0 },
     };
