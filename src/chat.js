@@ -63,8 +63,12 @@ function register(client) {
   client.on(Events.MessageCreate, async (message) => {
 
 
-    // Message handler for chat replies: mentions, replies and AI channel in servers, plain conversation in DMs.
+    // Determine if this is a DM, get the question text and any image URLs.
+    const isDM = !message.guild;
+    const question = await questionOf(message, client);
+    const imageUrls = imageUrlsOf(message);
     // Prefix command handling (e.g. "-snipe")
+    // Message version missing? Replace with combined lines.
     const raw = message.content?.trim() ?? '';
     if (raw.startsWith('-')) {
       const [cmd, ...args] = raw.slice(1).trim().split(/\s+/);
