@@ -17,6 +17,8 @@ const autorole = require('./src/autorole');
 const welcome = require('./src/welcome');
 const snipe = require('./src/snipe');
 const digest = require('./src/digest');
+const raid = require('./src/raid');
+const afk = require('./src/afk');
 const { fail, isBotOwner } = require('./src/utils');
 
 if (!config.token) {
@@ -55,6 +57,8 @@ welcome.register(client);
 snipe.register(client);
 stickies.register(client);
 digest.register(client);
+raid.register(client);
+afk.register(client);
 
 function friendlyError(err) {
   if (err.code === 50013) return 'I am missing the permissions needed for this action.';

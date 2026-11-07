@@ -3,6 +3,11 @@ const store = require('./storage');
 const { addModlogEntry } = require('./modlog');
 const { makeEmbed, sendLog, truncate } = require('./utils');
 
+// Roles whose members may share invite links.
+const INVITE_EXEMPT_ROLE_IDS = ['1568735212769120398'];
+// Matches discord.gg/xyz, discord.com/invite/xyz, discordapp.com/invite/xyz (case-insensitive).
+const INVITE_LINK = /(?:discord\.gg|discord(?:app)?\.com\/invite)\/[\w-]+/i;
+
 // Defaults for a server that has not configured auto-moderation yet. Each strike is a warning;
 // the timeout is applied when the member reaches a given strike.
 const DEFAULT_TIMEOUT_AT = 3;
@@ -42,6 +47,50 @@ function addStrike(guildId, userId, reason) {
 async function handleMessage(message) {
   if (!message.guild || message.author.bot) return;
   const config = automodConfig(message.guild.id);
+
+  // Invite links: always checked (independent of the blocked-words list). Members holding an
+  // exempt role or the Manage Messages permission may share them.
+  if (INVITE_LINK.test(message.content ?? '')) {
+    const exempt =
+      (message.member?.roles?.cache ?? []).some((role) => INVITE_EXEMPT_ROLE_IDS.includes(role.id)) ||
+      message.member?.permissions.has(PermissionFlagsBits.ManageMessages);
+    if (!exempt) {
+      await message.delete().catch(() => {});
+      addModlogEntry(message.guild.id, {
+        userId: message.author.id,
+        action: 'invite_link',
+        reason: `Invite link shared in #${message.channel.name ?? message.channelId}`,
+        meta: { channel: message.channelId },
+      });
+      await message.channel
+        .send({
+          content: `<@${message.author.id}>`,
+          embeds: [
+            makeEmbed(
+              'warn',
+              'Invite link removed',
+              [
+                'Your message contained a Discord invite link. Invite links from other servers are not allowed here.',
+                '',
+                `**Your message**\n> ${truncate(message.content ?? '(no text)', 500).split('\n').join('\n> ')}`,
+              ].join('\n'),
+            ),
+          ],
+        })
+        .catch(() => {});
+      await sendLog(message.guild, {
+        embeds: [
+          makeEmbed(
+            'warn',
+            'Invite link removed',
+            `**Member:** <@${message.author.id}>\n**Channel:** <#${message.channelId}>\n**Action:** message removed`,
+          ),
+        ],
+      });
+    }
+    return;
+  }
+
   const word = findBlockedWord(config, message.content);
   if (!word) return;
 

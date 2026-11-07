@@ -73,6 +73,31 @@ function register(client) {
     const raw = message.content?.trim() ?? '';
     if (raw.startsWith('-')) {
       const [cmd, ...args] = raw.slice(1).trim().split(/\s+/);
+      if (cmd.toLowerCase() === 'afk') {
+        const afk = require('./afk');
+        if (isDM) {
+          await message.reply('AFK only works in a server: `/afk <message>` or `-afk <message>` there.').catch(() => {});
+          return;
+        }
+        const text = args.join(' ').trim();
+        if (/^(off|end)$/i.test(text)) {
+          if (!afk.clearAfk(message.guild.id, message.author.id)) {
+            await message.reply('You are not marked as AFK.').catch(() => {});
+            return;
+          }
+          await message.reply('AFK cleared, you are back online.').catch(() => {});
+          return;
+        }
+        if (!text) {
+          const current = afk.getAfk(message.guild.id, message.author.id);
+          if (current) await message.reply(`Your AFK status: *${current.message}*`).catch(() => {});
+          else await message.reply('Usage: `-afk <message>` to set your status, `-afk off` to clear it.').catch(() => {});
+          return;
+        }
+        afk.setAfk(message.guild.id, message.author.id, text);
+        await message.reply(`You are now AFK: *${text}* (clear with \`-afk off\` or by sending any message).`).catch(() => {});
+        return;
+      }
       if (cmd.toLowerCase() === 'snipe') {
         const sub = args[0] ? args[0].toLowerCase() : null;
         if (sub === 'clear') {

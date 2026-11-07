@@ -9,15 +9,15 @@ const {
 const { isBotOwner, makeEmbed } = require('./utils');
 
 const CATEGORIES = {
-  moderation: { label: 'Moderation', emoji: String.fromCodePoint(0x1F6E1), description: 'Kick, ban, timeouts, warnings and moderation history', commands: ['kick', 'ban', 'unban', 'timeout', 'untimeout', 'warn', 'unwarn', 'warnings', 'automod', 'modlog'] },
-  channels: { label: 'Channels', emoji: String.fromCodePoint(0x1F4AC), description: 'Purge, slowmode, locks, sticky messages and polls', commands: ['purge', 'purge-user-time', 'slowmode', 'lock', 'unlock', 'sticky', 'poll'] },
+  moderation: { label: 'Moderation', emoji: String.fromCodePoint(0x1F6E1), description: 'Kick, ban, timeouts, warnings, nicknames, raid protection and moderation history', commands: ['kick', 'ban', 'unban', 'timeout', 'untimeout', 'warn', 'unwarn', 'warnings', 'automod', 'modlog', 'nick', 'raid'] },
+  channels: { label: 'Channels', emoji: String.fromCodePoint(0x1F4AC), description: 'Purge, slowmode, locks, broadcast, sticky messages and polls', commands: ['purge', 'purge-user-time', 'slowmode', 'lock', 'unlock', 'lockdown', 'unlockdown', 'broadcast', 'sticky', 'poll'] },
   levels: { label: 'Levels', emoji: String.fromCodePoint(0x1F4C8), description: 'XP, rank cards and leaderboard', commands: ['rank', 'leaderboard', 'xp', 'levels'] },
   giveaways: { label: 'Giveaways', emoji: String.fromCodePoint(0x1F389), description: 'Start and manage giveaways', commands: ['giveaway'] },
   backups: { label: 'Backups', emoji: String.fromCodePoint(0x1F4BE), description: 'Save and restore roles and channels', commands: ['backup'] },
   logs: { label: 'Logs', emoji: String.fromCodePoint(0x1F4DC), description: 'Activity logs and setup', commands: ['logs', 'setup'] },
   ai: { label: 'AI', emoji: String.fromCodePoint(0x1F916), description: 'Ask questions, draw images, memory and personality', commands: ['ask', 'imagine', 'image-quota', 'prompt-history', 'memory', 'personality'] },
   invites: { label: 'Invites', emoji: String.fromCodePoint(0x1F465), description: 'Invite counts and leaderboard', commands: ['invites'] },
-  utility: { label: 'Utility', emoji: String.fromCodePoint(0x1F9F0), description: 'Server and user information, health and reminders', commands: ['help', 'health', 'ping', 'avatar', 'userinfo', 'serverinfo', 'remind', 'changelog', 'download', 'link'] },
+  utility: { label: 'Utility', emoji: String.fromCodePoint(0x1F9F0), description: 'Server and user information, health, AFK and reminders', commands: ['help', 'health', 'ping', 'avatar', 'userinfo', 'serverinfo', 'afk', 'remind', 'changelog', 'download', 'link'] },
   radio: { label: 'Radio', emoji: String.fromCodePoint(0x1F3B5), description: 'Play music in a voice channel and show the current track', commands: ['radio'] },
   owner: { label: 'Bot owner', emoji: String.fromCodePoint(0x1F451), description: 'Bot statistics, diagnostics, presence, repository checks and reload', commands: ['botstats', 'botreload', 'debug', 'presence', 'repo-refresh', 'role'], ownerOnly: true },
 };

@@ -28,6 +28,11 @@ const ACTION_LABEL = {
   timeout: 'Timed out',
   untimeout: 'Timeout removed',
   purge: 'Messages purged',
+  nickname: 'Nickname changed',
+  raid: 'Raid mode',
+  invite_link: 'Invite link removed',
+  lockdown: 'Server locked down',
+  unlockdown: 'Lockdown off',
 };
 
 function modlogConfig(guildId) {
