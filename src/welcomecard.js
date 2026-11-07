@@ -30,6 +30,31 @@ function drawTokens(ctx, x, y, tokens) {
 
 const shorten = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
+// Short English greetings and goodbyes, shown as a code comment so they stay in the editor theme.
+const HELLOS = [
+  'Glad you made it.',
+  'Welcome aboard.',
+  'Good to see you here.',
+  'Pull up a chair.',
+  'The more, the merrier.',
+  'Hello there.',
+  'Nice of you to drop in.',
+  'Make yourself at home.',
+];
+
+const GOODBYES = [
+  'See you around.',
+  'Take care.',
+  'Until next time.',
+  'Safe travels.',
+  'The door stays open.',
+  'Catch you later.',
+  'Thanks for stopping by.',
+  'Farewell for now.',
+];
+
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+
 function formatDate(ms) {
   if (!ms) return 'unknown';
   return new Date(ms).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -62,6 +87,7 @@ async function renderWelcomeCard({ username, avatarUrl, themeId, memberCount, jo
     [['const', SYNTAX.keyword], [' memberCount', SYNTAX.name], [' = ', SYNTAX.punct], [String(memberCount ?? 0), SYNTAX.number], [';', SYNTAX.punct]],
     [['const', SYNTAX.keyword], [' joined', SYNTAX.name], [' = ', SYNTAX.punct], [JSON.stringify(formatDate(joinDate)), SYNTAX.string], [';', SYNTAX.punct]],
     [['const', SYNTAX.keyword], [' invitedBy', SYNTAX.name], [' = ', SYNTAX.punct], inviterValue, [';', SYNTAX.punct]],
+    [['// "', SYNTAX.comment], [pick(HELLOS), SYNTAX.comment], ['"', SYNTAX.comment]],
   ];
   lines.forEach((tokens, i) => {
     const y = 104 + i * 30;
@@ -123,6 +149,7 @@ async function renderFarewellCard({ username, avatarUrl, themeId, memberCount })
     [['const', SYNTAX.keyword], [' member', SYNTAX.name], [' = ', SYNTAX.punct], [JSON.stringify(shorten(username, 20)), SYNTAX.string], [';', SYNTAX.punct]],
     [['const', SYNTAX.keyword], [' memberCount', SYNTAX.name], [' = ', SYNTAX.punct], [String(memberCount ?? 0), SYNTAX.number], [';', SYNTAX.punct]],
     [['const', SYNTAX.keyword], [' status', SYNTAX.name], [' = ', SYNTAX.punct], ['"left"', SYNTAX.string], [';', SYNTAX.punct]],
+    [['// "', SYNTAX.comment], [pick(GOODBYES), SYNTAX.comment], ['"', SYNTAX.comment]],
   ];
   lines.forEach((tokens, i) => {
     const y = 104 + i * 30;
