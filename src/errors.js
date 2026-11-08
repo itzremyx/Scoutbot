@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const config = require('./config');
+const health = require('./health');
 
 const COLOR = 0xed4245;
 const reported = new Map();
@@ -24,6 +25,12 @@ function reportError(client, source, err) {
   const now = Date.now();
   if (now - (reported.get(key) || 0) < 60_000) return;
   reported.set(key, now);
+
+  // Critical process errors also reach the owner (DM + optional external webhook), so a crash
+  // is noticed even when nobody watches the changelog channel.
+  if (source === 'uncaughtException' || source === 'unhandledRejection') {
+    health.alertOwner(`ScoutBot ${source}`, message, { key: 'crash:' + source }).catch(() => {});
+  }
 
   const channelId = config.botRepoChannelId;
   const channel = channelId ? client.channels.cache.get(channelId) : null;

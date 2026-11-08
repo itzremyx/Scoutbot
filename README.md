@@ -38,3 +38,5 @@ ScoutBot commit posts need `View Channel`, `Send Messages` and `Embed Links` in 
 - `/help` lists the commands
 - `/setup` configures logs, tickets and levels
 - `/memory` manages user facts, server rules and pending approvals
+- `/doctor` checks channels, permissions, the AI endpoint and stored data (bot owner only)
+- Tickets idle for 48 hours close automatically, with the transcript sent to the log channel and the opener

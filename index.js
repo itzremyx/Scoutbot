@@ -20,6 +20,8 @@ const snipe = require('./src/snipe');
 const digest = require('./src/digest');
 const raid = require('./src/raid');
 const afk = require('./src/afk');
+const tickets = require('./src/tickets');
+const health = require('./src/health');
 const { fail, isBotOwner } = require('./src/utils');
 
 if (!config.token) {
@@ -64,6 +66,8 @@ stickies.register(client);
 digest.register(client);
 raid.register(client);
 afk.register(client);
+tickets.register(client);
+health.register(client);
 
 function friendlyError(err) {
   if (err.code === 50013) return 'I am missing the permissions needed for this action.';
@@ -83,6 +87,7 @@ client.once(Events.ClientReady, async (c) => {
   levels.startScheduler(c);
   reminders.startScheduler(c);
   digest.startScheduler(c);
+  tickets.startScheduler(c);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -109,7 +114,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 // Chat replies (mentions in servers, plain conversation in DMs) live in src/chat.js.
-client.login(config.token);
+client.login(config.token).catch(async (err) => {
+  console.error('Login failed:', err.message);
+  // A failed login leaves no client to DM from, so this relies on ALERT_WEBHOOK_URL.
+  await health.alertOwner('ScoutBot login failed', err.message, { key: 'login', force: true }).catch(() => {});
+  process.exit(1);
+});
 
 // Reports crashed never reach the event loop without these: uncaught exceptions,
 // rejected promises and client/rest/shard errors are posted to the bot repo channel.

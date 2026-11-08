@@ -19,7 +19,7 @@ const CATEGORIES = {
   invites: { label: 'Invites', emoji: String.fromCodePoint(0x1F465), description: 'Invite counts and leaderboard', commands: ['invites'] },
   utility: { label: 'Utility', emoji: String.fromCodePoint(0x1F9F0), description: 'Server and user information, health, AFK and reminders', commands: ['help', 'health', 'ping', 'avatar', 'userinfo', 'serverinfo', 'afk', 'remind', 'changelog', 'download', 'link'] },
   radio: { label: 'Radio', emoji: String.fromCodePoint(0x1F3B5), description: 'Play music in a voice channel and show the current track', commands: ['radio'] },
-  owner: { label: 'Bot owner', emoji: String.fromCodePoint(0x1F451), description: 'Bot statistics, diagnostics, presence, repository checks and reload', commands: ['botstats', 'botreload', 'debug', 'presence', 'repo-refresh', 'role'], ownerOnly: true },
+  owner: { label: 'Bot owner', emoji: String.fromCodePoint(0x1F451), description: 'Bot statistics, diagnostics, health checks, presence, repository checks and reload', commands: ['botstats', 'botreload', 'debug', 'doctor', 'presence', 'repo-refresh', 'role'], ownerOnly: true },
 };
 
 const OTHER = { label: 'Other', emoji: String.fromCodePoint(0x1F4E6), description: 'Commands without a category', commands: [] };

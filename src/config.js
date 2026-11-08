@@ -22,6 +22,10 @@ function buildConfig() {
       name: 'Gentra',
       id: process.env.BOT_OWNER_ID || '1561860035158736898',
     },
+    // Health alerts: a Discord webhook (works even before login) and an optional external
+    // heartbeat URL (e.g. healthchecks.io) pinged every 5 minutes.
+    alertWebhookUrl: process.env.ALERT_WEBHOOK_URL || '',
+    healthcheckUrl: process.env.HEALTHCHECK_URL || '',
     defaultPersonality: 'You are a friendly, helpful Discord bot. Keep answers clear and concise.',
     ai: {
       apiKey: process.env.AI_API_KEY,

@@ -276,6 +276,14 @@ async function callModel(system, messages, { maxTokens = config.ai.maxTokens, ef
 
     if (!response.ok) {
       const reason = data.error?.message ?? data.base_resp?.status_msg ?? response.statusText;
+      // A rejected key is a configuration problem the owner must know about right away.
+      if (response.status === 401 || response.status === 403) {
+        require('./health').notify(
+          'AI authentication failed',
+          `The AI API rejected the key (HTTP ${response.status}): ${reason}\n\nEndpoint: ${config.ai.baseUrl}`,
+          { key: 'ai' },
+        ).catch(() => {});
+      }
       throw new Error(`AI request failed (${response.status}): ${reason}`);
     }
 

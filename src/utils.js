@@ -67,9 +67,10 @@ async function checkTarget(guild, moderatorId, target) {
 
 async function sendLog(guild, payload) {
   const { logChannelId } = store.guild(guild.id);
-  if (!logChannelId) return;
+  if (!logChannelId) return false;
   const channel = await guild.channels.fetch(logChannelId).catch(() => null);
-  if (channel?.isTextBased()) await channel.send(payload).catch(() => {});
+  if (!channel?.isTextBased()) return false;
+  return channel.send(payload).then(() => true).catch(() => false);
 }
 
 async function dmUser(user, embed) {

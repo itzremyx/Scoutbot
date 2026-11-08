@@ -4,6 +4,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
+  Events,
   PermissionFlagsBits,
   StringSelectMenuBuilder,
 } = require('discord.js');
@@ -11,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const store = require('./storage');
+const health = require('./health');
 const { fail, makeEmbed, sendLog } = require('./utils');
 
 const TICKET_TYPES = {
@@ -72,6 +74,34 @@ async function getTicketCategory(guild) {
 }
 
 const MAX_TICKETS_PER_CATEGORY = 3;
+
+// A ticket with no message for this long is closed automatically (with a transcript).
+const INACTIVE_CLOSE_MS = 48 * 60 * 60 * 1000;
+const TICKET_CHECK_EVERY_MS = 10 * 60 * 1000;
+// Guards against two close paths (button + scheduler) racing on the same channel.
+const closing = new Set();
+
+const lastActivityOf = (ticket) => ticket.lastActivity ?? ticket.createdAt ?? 0;
+
+// Records activity in a ticket channel. Writes at most once a minute per ticket so a busy
+// conversation does not rewrite the store on every message.
+function touchTicket(guildId, channelId) {
+  const ticket = store.data.guilds[guildId]?.tickets?.[channelId];
+  if (!ticket) return;
+  const now = Date.now();
+  if (now - lastActivityOf(ticket) < 60_000) return;
+  ticket.lastActivity = now;
+  store.save();
+}
+
+// Counts any human message in a ticket channel as activity, so an active conversation is
+// never closed by the 48-hour timer.
+function register(client) {
+  client.on(Events.MessageCreate, (message) => {
+    if (!message.guild || message.author?.bot) return;
+    touchTicket(message.guild.id, message.channelId ?? message.channel?.id);
+  });
+}
 
 // Returns the user's still-open ticket channels, optionally limited to one category.
 // Drops tickets whose channel was deleted by hand.
@@ -140,7 +170,8 @@ async function createTicket(guild, user, type) {
     ],
   });
 
-  store.guild(guild.id).tickets[channel.id] = { userId: user.id, type, createdAt: Date.now() };
+  const now = Date.now();
+  store.guild(guild.id).tickets[channel.id] = { userId: user.id, type, createdAt: now, lastActivity: now };
   store.save();
 
   const info = TICKET_TYPES[type];
@@ -218,6 +249,72 @@ async function saveTranscript(channel, ticket, closedBy) {
   return { path: filePath, name };
 }
 
+// Closes a ticket channel once, whichever path asked (button, command or the inactivity
+// scheduler). The transcript is written first and then delivered to the activity-log channel
+// and to the opener's DMs; if neither destination accepts it, the owner is alerted so the
+// history is never silently lost.
+async function closeTicketChannel(client, guild, channel, ticket, closedBy, reason = null) {
+  if (closing.has(channel.id)) return false;
+  closing.add(channel.id);
+  try {
+    const settings = store.guild(guild.id);
+    const transcript = await saveTranscript(channel, ticket, closedBy).catch((err) => {
+      console.error('Transcript failed:', err);
+      return null;
+    });
+    delete settings.tickets[channel.id];
+    store.save();
+
+    const transcriptFiles = () =>
+      transcript ? [new AttachmentBuilder(transcript.path, { name: transcript.name })] : [];
+    const reasonLine = reason ? `\n**Reason:** ${reason}` : '';
+    const closedByLine = closedBy?.id === client.user?.id
+      ? 'ScoutBot (automatic)'
+      : `<@${closedBy.id}>`;
+
+    const logged = await sendLog(guild, {
+      embeds: [
+        makeEmbed(
+          'info',
+          'Ticket closed',
+          `**Channel:** ${channel.name}\n**Type:** ${TICKET_TYPES[ticket.type]?.label ?? ticket.type}\n**Opened by:** <@${ticket.userId}>\n**Closed by:** ${closedByLine}${reasonLine}`,
+        ),
+      ],
+      files: transcriptFiles(),
+    });
+
+    let delivered = false;
+    const opener = await client.users.fetch(ticket.userId).catch(() => null);
+    if (opener) {
+      delivered = await opener
+        .send({
+          content: `Your ${TICKET_TYPES[ticket.type]?.label ?? ''} ticket in **${guild.name}** was closed${reason ? ` (${reason.replace(/\.$/, '')})` : ''}. Here is the transcript.`,
+          files: transcriptFiles(),
+        })
+        .then(() => true)
+        .catch(() => false);
+    }
+
+    if (!logged && !delivered) {
+      await health.alertOwner(
+        'Ticket transcript could not be delivered',
+        `Ticket **${channel.name}** in **${guild.name}** was closed, but neither the log channel nor the opener's DMs accepted the transcript. It is stored at \`${transcript?.path ?? 'unknown'}\`.`,
+        { key: 'ticket-transcript' },
+      ).catch(() => {});
+    }
+
+    await channel
+      .send({ embeds: [makeEmbed('warn', 'Ticket closed', reason || `Closed by ${closedBy?.username ?? 'staff'}.`)] })
+      .catch(() => {});
+    setTimeout(() => {
+      channel.delete(`Ticket closed by ${closedBy?.username ?? 'staff'}`).catch(() => {});
+    }, 5000);
+    return true;
+  } finally {
+    closing.delete(channel.id);
+  }
+}
+
 async function closeTicket(interaction) {
   const { channel, guild, user } = interaction;
   const settings = store.guild(guild.id);
@@ -229,42 +326,43 @@ async function closeTicket(interaction) {
     return fail(interaction, 'Only the ticket owner or staff can close this ticket.');
   }
 
+  if (closing.has(channel.id)) return fail(interaction, 'This ticket is already closing.');
+
   await interaction.reply({ embeds: [makeEmbed('warn', 'Closing ticket', 'This ticket will be deleted in 5 seconds.')] });
+  await closeTicketChannel(guild.client, guild, channel, ticket, user);
+}
 
-  const transcript = await saveTranscript(channel, ticket, user).catch((err) => {
-    console.error('Transcript failed:', err);
-    return null;
-  });
-  delete settings.tickets[channel.id];
-  store.save();
+// Closes every ticket with no message for INACTIVE_CLOSE_MS, including tickets that were idle
+// while the bot was offline. The channel, transcript and DM flow is identical to a manual close.
+async function closeInactiveTickets(client) {
+  for (const [guildId, data] of Object.entries(store.data.guilds)) {
+    const tickets = data?.tickets ?? {};
+    if (!Object.keys(tickets).length) continue;
+    const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId).catch(() => null);
+    if (!guild) continue;
 
-  const transcriptFiles = () =>
-    transcript ? [new AttachmentBuilder(transcript.path, { name: transcript.name })] : [];
+    for (const channelId of Object.keys(tickets)) {
+      const ticket = store.data.guilds[guildId]?.tickets?.[channelId];
+      if (!ticket) continue;
+      if (Date.now() - lastActivityOf(ticket) < INACTIVE_CLOSE_MS) continue;
 
-  await sendLog(guild, {
-    embeds: [
-      makeEmbed(
-        'info',
-        'Ticket closed',
-        `**Channel:** ${channel.name}\n**Type:** ${TICKET_TYPES[ticket.type]?.label ?? ticket.type}\n**Opened by:** <@${ticket.userId}>\n**Closed by:** <@${user.id}>`,
-      ),
-    ],
-    files: transcriptFiles(),
-  });
-
-  const opener = await guild.client.users.fetch(ticket.userId).catch(() => null);
-  if (opener) {
-    await opener
-      .send({
-        content: `Your ${TICKET_TYPES[ticket.type]?.label ?? ''} ticket in **${guild.name}** was closed. Here is the transcript.`,
-        files: transcriptFiles(),
-      })
-      .catch(() => {});
+      const channel = await guild.channels.fetch(channelId).catch(() => null);
+      if (!channel) {
+        delete store.guild(guildId).tickets[channelId]; // deleted by hand
+        store.save();
+        continue;
+      }
+      const reason = `Automatically closed after ${Math.round(INACTIVE_CLOSE_MS / 3_600_000)} hours of inactivity.`;
+      await closeTicketChannel(client, guild, channel, ticket, client.user, reason)
+        .catch((err) => console.error('Auto-close failed for ' + channelId + ':', err.message));
+    }
   }
+}
 
-  setTimeout(() => {
-    channel.delete(`Ticket closed by ${user.username}`).catch(() => {});
-  }, 5000);
+function startScheduler(client) {
+  const tick = () => closeInactiveTickets(client).catch((err) => console.error('Ticket scheduler failed:', err.message));
+  setTimeout(tick, 60_000); // let the guild cache fill after login
+  setInterval(tick, TICKET_CHECK_EVERY_MS);
 }
 
 // Staff press Claim to take a ticket. Pressing it again (by the same staff member) releases it.
@@ -291,6 +389,7 @@ async function claimTicket(interaction) {
 
   ticket.claimedBy = user.id;
   ticket.claimedAt = Date.now();
+  ticket.lastActivity = Date.now();
   store.save();
   return interaction.reply({ embeds: [makeEmbed('success', 'Ticket claimed', `<@${user.id}> is handling this ticket.`)] });
 }
@@ -298,9 +397,15 @@ async function claimTicket(interaction) {
 module.exports = {
   TICKET_TYPES,
   MAX_TICKETS_PER_CATEGORY,
+  INACTIVE_CLOSE_MS,
   buildPanel,
   openTickets,
   createTicket,
   closeTicket,
+  closeTicketChannel,
+  closeInactiveTickets,
+  touchTicket,
+  register,
+  startScheduler,
   claimTicket,
 };
