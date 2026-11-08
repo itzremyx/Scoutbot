@@ -14,7 +14,6 @@ const store = require('./storage');
 const { fail, makeEmbed, sendLog } = require('./utils');
 
 const TICKET_TYPES = {
-  bugs: { label: 'Bugs', emoji: '🐛', description: 'Report something that is broken' },
   help: { label: 'Help', emoji: '❓', description: 'Ask for help or a question' },
   partnership: { label: 'Partnership', emoji: '🤝', description: 'Propose a partnership' },
 };
@@ -51,7 +50,7 @@ function buildPanel(guild) {
       makeEmbed(
         'info',
         `🎫 ${guild.name} Support`,
-        'Need help or want to report something? Pick a category below and a private ticket will be opened for you.',
+        'Need help or want to talk about a partnership? Pick a category below and a private ticket will be opened for you.',
       ),
     ],
     components: [new ActionRowBuilder().addComponents(menu)],
@@ -98,6 +97,13 @@ async function openTickets(guild, userId, type) {
 }
 
 async function createTicket(guild, user, type) {
+  if (!TICKET_TYPES[type]) {
+    return {
+      blocked: true,
+      reply: 'That ticket category is no longer available. Use the latest panel and pick **Help** or **Partnership**.',
+    };
+  }
+
   const open = await openTickets(guild, user.id, type);
   if (open.length >= MAX_TICKETS_PER_CATEGORY) {
     const links = open.map((channel) => `${TICKET_TYPES[type].emoji} ${channel}`).join('\n');

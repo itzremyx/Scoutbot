@@ -17,7 +17,7 @@ async function handleTicketSelect(interaction) {
         makeEmbed(
           'warn',
           'Ticket blocked',
-          `**User:** <@${interaction.user.id}>\n**Category:** ${TICKET_TYPES[type].label}\n**Reason:** limit of ${MAX_TICKETS_PER_CATEGORY} open tickets reached.`,
+          `**User:** <@${interaction.user.id}>\n**Category:** ${TICKET_TYPES[type]?.label ?? type}\n**Reason:** ${TICKET_TYPES[type] ? `limit of ${MAX_TICKETS_PER_CATEGORY} open tickets reached` : 'category removed'}.`,
         ),
       ],
     });
