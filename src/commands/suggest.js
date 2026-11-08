@@ -68,7 +68,7 @@ const suggest = {
         name: truncate(title, 100),
         appliedTags: tag ? [tag.id] : [],
         message: {
-          content: `**Suggestion**\n${details}`,
+          content: `## Suggestion\n-# Suggested by ${interaction.user}\n**${truncate(title, 100)}**\n\n${details}`,
           allowedMentions: { parse: [] },
         },
         reason: `Suggestion by ${interaction.user.username}`,
