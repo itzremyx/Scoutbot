@@ -272,6 +272,23 @@ async function alreadyPosted(channel, sha) {
   }));
 }
 
+// Same check as alreadyPosted but for a whole batch: one channel fetch instead of one per
+// commit, so confirming a gap catch-up stays cheap.
+async function allPosted(channel, shas) {
+  if (!shas?.length) return true;
+  const recent = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+  if (!recent) return false;
+  const me = channel.client.user?.id;
+  const mine = [...recent.values()].filter((message) => message.author?.id === me);
+  return shas.every((sha) => {
+    const short = String(sha || '').slice(0, 7);
+    return mine.some((message) => message.embeds?.some((embed) => {
+      const bits = [embed.url, embed.description, ...(embed.fields || []).map((field) => field.value)];
+      return bits.some((bit) => String(bit || '').includes(short));
+    }));
+  });
+}
+
 async function postTo(client, embed, sha) {
   const channel = await channelOf(client);
   if (!channel) return false;
@@ -338,13 +355,13 @@ async function checkOnce(client) {
     store.save();
   }
 
-  // A gap catch-up advances lastSha only as far as the oldest commit it just posted, which
-  // would make every later tick re-fetch and re-check the rest of the gap. Once every commit
-  // of the gap is confirmed in the channel, the cursor can jump straight to the newest one.
-  if (fresh.length && !replayUndelivered && posted === fresh.length && posted > 1) {
+  // The pre-save above only moves lastSha as far as the oldest commit in the gap (fresh[0]),
+  // so every later tick would re-detect the rest, re-fetch each commit's details from GitHub
+  // and advance one step at a time. Once a whole multi-commit gap was posted and is confirmed
+  // present in the channel, jump the cursor straight to the newest commit.
+  if (fresh.length > 1 && posted === fresh.length && !replayUndelivered) {
     const channel = await channelOf(client);
-    if (channel && (await Promise.all(fresh.map((commit) => alreadyPosted(channel, commit.sha))))
-      .every(Boolean)) {
+    if (channel && await allPosted(channel, fresh.map((commit) => commit.sha))) {
       current.lastSha = fresh[fresh.length - 1].sha;
       store.save();
     }
