@@ -129,7 +129,7 @@ test('helpPayload is ephemeral and provides categories in English by default', (
   const payload = help.helpPayload(commands, true, 'en');
   assert.strictEqual(payload.flags, 64);
   assert.strictEqual(payload.embeds.length, 1);
-  assert.ok(payload.components.length >= 2);
+  assert.ok(payload.components.length >= 1);
 });
 
 test('link command has valid name, description, and required code option', () => {

@@ -1,8 +1,6 @@
 const {
   MessageFlags,
   ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } = require('discord.js');
@@ -24,34 +22,13 @@ const CATEGORIES = {
 
 const OTHER = { label: 'Other', emoji: String.fromCodePoint(0x1F4E6), description: 'Commands without a category', commands: [] };
 
-// Discord locales are reduced to the languages supported by this help view.
-const LOCALES = {
-  en: { choose: 'Choose a category', translate: 'Translate to English', title: 'Help', intro: 'Pick a category in the menu to see its commands.', unavailable: 'That category is not available.', categories: {} },
-  fr: {
-    choose: 'Choisissez une categorie', translate: 'Traduire en anglais', title: 'Aide',
-    intro: 'Choisissez une categorie dans le menu pour voir ses commandes.', unavailable: 'Cette categorie n est pas disponible.',
-    categories: {
-      moderation: ['Moderation', 'Expulser, bannir, avertir et gerer la moderation'], channels: ['Salons', 'Gerer les salons, messages epingles et sondages'],
-      levels: ['Niveaux', 'XP, cartes de rang et classement'], giveaways: ['Concours', 'Creer et gerer des concours'], backups: ['Sauvegardes', 'Sauvegarder et restaurer les salons et roles'],
-      logs: ['Journaux', 'Journaux d activite et configuration'], ai: ['IA', 'Questions, images, memoire et personnalite'], utility: ['Utilitaires', 'Informations, sante du bot et rappels'],
-      owner: ['Proprietaire du bot', 'Statistiques, diagnostics, presence, depot et rechargement'], other: ['Autres', 'Commandes sans categorie'],
-    },
-  },
-  de: { choose: 'Kategorie auswahlen', translate: 'Auf Englisch ubersetzen', title: 'Hilfe', intro: 'Wahle eine Kategorie, um ihre Befehle zu sehen.', unavailable: 'Diese Kategorie ist nicht verfugbar.', categories: { ai: ['KI', 'Fragen, Bilder, Speicher und Personlichkeit'], utility: ['Werkzeuge', 'Informationen, Bot-Status und Erinnerungen'] } },
-  es: { choose: 'Elige una categoria', translate: 'Al ingles', title: 'Ayuda', intro: 'Elige una categoria para ver sus comandos.', unavailable: 'Esta categoria no esta disponible.', categories: { ai: ['IA', 'Preguntas, imagenes, memoria y personalidad'], utility: ['Utilidades', 'Informacion, estado del bot y recordatorios'] } },
-  pt: { choose: 'Escolha uma categoria', translate: 'Traduzir para ingles', title: 'Ajuda', intro: 'Escolha uma categoria para ver seus comandos.', unavailable: 'Essa categoria nao esta disponivel.', categories: { ai: ['IA', 'Perguntas, imagens, memoria e personalidade'], utility: ['Utilidades', 'Informacoes, estado do bot e lembretes'] } },
-  ja: { choose: 'Select a category', translate: 'Translate to English', title: 'Help', intro: 'Select a category to see its commands.', unavailable: 'That category is not available.', categories: { ai: ['AI', 'Questions, images, memory and personality'], utility: ['Utility', 'Information, bot status and reminders'] } },
+// The bot is English-only, so /help always uses this single set of strings.
+const STRINGS = {
+  choose: 'Choose a category',
+  title: 'Help',
+  intro: 'Pick a category in the menu to see its commands.',
+  unavailable: 'That category is not available.',
 };
-
-function localeKey(locale) {
-  const key = String(locale ?? '').toLowerCase().split(/[-_]/)[0];
-  return LOCALES[key] ? key : 'en';
-}
-
-function localize(category, locale) {
-  const value = LOCALES[locale].categories[category.key];
-  return value ? { ...category, label: value[0], description: value[1] } : category;
-}
 
 function visibleCategories(commands, isOwner) {
   const byName = new Map(commands.map((c) => [c.data.name, c]));
@@ -75,40 +52,38 @@ function formatCommand(command) {
   return subs.map((sub) => `\`/${json.name} ${sub.name}\`: ${sub.description}`).join('\n');
 }
 
-function categoryEmbed(category, locale = 'en') {
-  const localized = localize(category, locale);
-  return makeEmbed('info', `${localized.emoji} ${localized.label}`, localized.items.map(formatCommand).join('\n'));
+function categoryEmbed(category) {
+  return makeEmbed('info', `${category.emoji} ${category.label}`, category.items.map(formatCommand).join('\n'));
 }
 
-function helpPayload(commands, isOwner, requestedLocale = 'en') {
-  const locale = localeKey(requestedLocale);
-  const strings = LOCALES[locale];
-  const categories = visibleCategories(commands, isOwner).map((category) => localize(category, locale));
+// The extra parameters keep older call sites working; the help view itself is always English.
+function helpPayload(commands, isOwner) {
+  const categories = visibleCategories(commands, isOwner);
   const menu = new StringSelectMenuBuilder()
-    .setCustomId(`help:select:${locale}`)
-    .setPlaceholder(strings.choose)
+    .setCustomId('help:select')
+    .setPlaceholder(STRINGS.choose)
     .addOptions(categories.map((category) => new StringSelectMenuOptionBuilder()
       .setLabel(category.label).setValue(category.key).setDescription(category.description).setEmoji(category.emoji)));
-  const overview = makeEmbed('info', strings.title, `${strings.intro}\n\n${categories.map((c) => `${c.emoji} **${c.label}**: ${c.description}`).join('\n')}`);
-  const translate = new ButtonBuilder().setCustomId('help:english').setLabel(strings.translate).setStyle(ButtonStyle.Secondary);
+  const overview = makeEmbed('info', STRINGS.title, `${STRINGS.intro}\n\n${categories.map((c) => `${c.emoji} **${c.label}**: ${c.description}`).join('\n')}`);
   return {
     embeds: [overview],
-    components: [new ActionRowBuilder().addComponents(menu), new ActionRowBuilder().addComponents(translate)],
+    components: [new ActionRowBuilder().addComponents(menu)],
     flags: MessageFlags.Ephemeral,
   };
 }
 
 async function handleHelpSelect(interaction, commands) {
   const isOwner = await isBotOwner(interaction.client, interaction.user.id);
-  const locale = localeKey(interaction.customId.split(':')[2] || interaction.locale);
   const category = visibleCategories(commands, isOwner).find((item) => item.key === interaction.values[0]);
-  if (!category) return interaction.update({ embeds: [makeEmbed('error', LOCALES[locale].title, LOCALES[locale].unavailable)], components: [] });
-  return interaction.update({ embeds: [categoryEmbed(category, locale)], components: helpPayload(commands, isOwner, locale).components });
+  if (!category) return interaction.update({ embeds: [makeEmbed('error', STRINGS.title, STRINGS.unavailable)], components: [] });
+  return interaction.update({ embeds: [categoryEmbed(category)], components: helpPayload(commands, isOwner).components });
 }
 
+// Kept so the "Translate to English" button on help messages posted by older builds still
+// works: it simply re-renders the English help view.
 async function handleHelpEnglish(interaction, commands) {
   const isOwner = await isBotOwner(interaction.client, interaction.user.id);
-  const { embeds, components } = helpPayload(commands, isOwner, 'en');
+  const { embeds, components } = helpPayload(commands, isOwner);
   return interaction.update({ embeds, components });
 }
 

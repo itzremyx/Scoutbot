@@ -60,7 +60,7 @@ async function handleComponent(interaction) {
   if (id === 'automod:remove') return handleAutomodRemoveSelect(interaction);
   if (id === 'unban:select') return handleUnbanSelect(interaction);
   if (id.startsWith('giveaway:join:')) return joinGiveaway(interaction);
-  if (id.startsWith('help:select:')) return handleHelpSelect(interaction, require('./loader').allCommands());
+  if (id === 'help:select' || id.startsWith('help:select:')) return handleHelpSelect(interaction, require('./loader').allCommands());
   if (id === 'help:english') return handleHelpEnglish(interaction, require('./loader').allCommands());
 }
 
