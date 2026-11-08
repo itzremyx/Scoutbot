@@ -20,10 +20,10 @@ Put the server's `DISCORD_TOKEN` and `AI_API_KEY` in `.env`. The file stays on t
 
 The default IDs in `src/config.js` are the live IDs for Gentra's server:
 
-- AI channel: `1566503029916700752`
+- AI channel: `1568689660245450993`
 - ScoutCode updates: `1566490353748680814`
 - ScoutCode changelog: `1566490537006202880`
-- ScoutBot commits: `1567292394116751390`
+- ScoutBot commits: `1568689855284777144`
 - auto-role: `1566953972290289764`
 - owner: Gentra (`1561860035158736898`)
 

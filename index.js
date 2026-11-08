@@ -2,6 +2,7 @@ const { MessageFlags, Client, Events, GatewayIntentBits, Partials } = require('d
 const config = require('./src/config');
 const loader = require('./src/loader');
 const logs = require('./src/logs');
+const migrate = require('./src/migrate');
 const giveaways = require('./src/giveaways');
 const levels = require('./src/levels');
 const chat = require('./src/chat');
@@ -25,6 +26,10 @@ if (!config.token) {
   console.error('Missing DISCORD_TOKEN. Copy .env.example to .env and fill it in.');
   process.exit(1);
 }
+
+// Idempotent store migrations (re-created dev channels, commit cursor rewind). Runs before
+// the first botrepo tick so the gap is already visible on the very first check.
+if (migrate.migrate()) console.log('Store migrations applied');
 
 const client = new Client({
   intents: [
