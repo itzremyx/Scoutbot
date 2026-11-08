@@ -337,6 +337,18 @@ async function checkOnce(client) {
     posted += 1;
     store.save();
   }
+
+  // A gap catch-up advances lastSha only as far as the oldest commit it just posted, which
+  // would make every later tick re-fetch and re-check the rest of the gap. Once every commit
+  // of the gap is confirmed in the channel, the cursor can jump straight to the newest one.
+  if (fresh.length && !replayUndelivered && posted === fresh.length && posted > 1) {
+    const channel = await channelOf(client);
+    if (channel && (await Promise.all(fresh.map((commit) => alreadyPosted(channel, commit.sha))))
+      .every(Boolean)) {
+      current.lastSha = fresh[fresh.length - 1].sha;
+      store.save();
+    }
+  }
   return posted;
 }
 
