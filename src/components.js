@@ -1,5 +1,5 @@
 const { MessageFlags, PermissionFlagsBits } = require('discord.js');
-const { claimTicket, closeTicket, createTicket, findOpenTicket, TICKET_TYPES } = require('./tickets');
+const { claimTicket, closeTicket, createTicket, MAX_TICKETS_PER_CATEGORY, TICKET_TYPES } = require('./tickets');
 const { handleUnwarnSelect } = require('./commands/warn');
 const { handleUnbanSelect } = require('./commands/moderation');
 const { joinGiveaway } = require('./giveaways');
@@ -10,12 +10,21 @@ async function handleTicketSelect(interaction) {
   const type = interaction.values[0];
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const existing = await findOpenTicket(interaction.guild, interaction.user.id);
-  if (existing) {
-    return interaction.editReply({ content: `You already have an open ticket: ${existing}` });
+  const result = await createTicket(interaction.guild, interaction.user, type);
+  if (result.blocked) {
+    sendLog(interaction.guild, {
+      embeds: [
+        makeEmbed(
+          'warn',
+          'Ticket blocked',
+          `**User:** <@${interaction.user.id}>\n**Category:** ${TICKET_TYPES[type].label}\n**Reason:** limit of ${MAX_TICKETS_PER_CATEGORY} open tickets reached.`,
+        ),
+      ],
+    });
+    return interaction.editReply({ content: result.reply });
   }
 
-  const channel = await createTicket(interaction.guild, interaction.user, type);
+  const channel = result;
   await sendLog(interaction.guild, {
     embeds: [
       makeEmbed(

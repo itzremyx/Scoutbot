@@ -72,21 +72,41 @@ async function getTicketCategory(guild) {
   return category;
 }
 
-async function findOpenTicket(guild, userId) {
+const MAX_TICKETS_PER_CATEGORY = 3;
+
+// Returns the user's still-open ticket channels, optionally limited to one category.
+// Drops tickets whose channel was deleted by hand.
+async function openTickets(guild, userId, type) {
   const settings = store.guild(guild.id);
+  const open = [];
+  let cleaned = false;
   for (const [channelId, ticket] of Object.entries(settings.tickets)) {
     if (ticket.userId !== userId) continue;
+    if (type && ticket.type !== type) continue;
 
     const channel = await guild.channels.fetch(channelId).catch(() => null);
-    if (channel) return channel;
+    if (channel) {
+      open.push(channel);
+      continue;
+    }
 
     delete settings.tickets[channelId]; // channel was deleted by hand
-    store.save();
+    cleaned = true;
   }
-  return null;
+  if (cleaned) store.save();
+  return open;
 }
 
 async function createTicket(guild, user, type) {
+  const open = await openTickets(guild, user.id, type);
+  if (open.length >= MAX_TICKETS_PER_CATEGORY) {
+    const links = open.map((channel) => `${TICKET_TYPES[type].emoji} ${channel}`).join('\n');
+    return {
+      blocked: true,
+      reply: `You already have **${open.length}/${MAX_TICKETS_PER_CATEGORY}** open tickets in the **${TICKET_TYPES[type].label}** category.\n${links}`,
+    };
+  }
+
   const category = await getTicketCategory(guild);
   const slug =
     user.username
@@ -162,6 +182,8 @@ async function fetchAllMessages(channel) {
 // Writes the full ticket history to data/transcripts/<channel>-<id>.txt and returns the file path and name.
 async function saveTranscript(channel, ticket, closedBy) {
   const messages = await fetchAllMessages(channel);
+  const pinned = await channel.messages.fetchPinned().catch(() => new Map());
+  const pinnedIds = new Set(pinned.keys());
   const header = [
     `Ticket: #${channel.name} (${channel.id})`,
     `Type: ${TICKET_TYPES[ticket.type]?.label ?? ticket.type}`,
@@ -171,6 +193,7 @@ async function saveTranscript(channel, ticket, closedBy) {
     `Closed by: ${closedBy.username} (${closedBy.id})`,
     `Closed at: ${new Date().toISOString()}`,
     `Messages: ${messages.length}`,
+    ...(pinned.size ? [`Pinned: ${pinned.size}`] : []),
     '-'.repeat(60),
   ];
   const lines = messages.map((message) => {
@@ -178,7 +201,8 @@ async function saveTranscript(channel, ticket, closedBy) {
     const embeds = message.embeds.length ? ` [embeds: ${message.embeds.length}]` : '';
     const files = [...message.attachments.values()].map((file) => file.url);
     const attachments = files.length ? ` [attachments: ${files.join(', ')}]` : '';
-    return `[${message.createdAt.toISOString()}] ${message.author.username}: ${text}${embeds}${attachments}`;
+    const pin = pinnedIds.has(message.id) ? ' 📌' : '';
+    return `[${message.createdAt.toISOString()}] ${message.author.username}: ${text}${pin}${embeds}${attachments}`;
   });
 
   const name = `${channel.name}-${channel.id}.txt`;
@@ -267,8 +291,9 @@ async function claimTicket(interaction) {
 
 module.exports = {
   TICKET_TYPES,
+  MAX_TICKETS_PER_CATEGORY,
   buildPanel,
-  findOpenTicket,
+  openTickets,
   createTicket,
   closeTicket,
   claimTicket,
