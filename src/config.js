@@ -30,8 +30,10 @@ function buildConfig() {
     alertWebhookUrl: process.env.ALERT_WEBHOOK_URL || '',
     healthcheckUrl: process.env.HEALTHCHECK_URL || '',
     // Minimal read-only status dashboard. Disabled unless a token is set.
+    // DASHBOARD_PORT wins; otherwise fall back to the panel's allocated PORT (Enzonic exports
+    // SERVER_PORT as PORT), so the page is reachable through the server's public allocation.
     dashboard: {
-      port: envNumber('DASHBOARD_PORT', 3000),
+      port: envNumber('DASHBOARD_PORT', envNumber('PORT', 3000)),
       token: process.env.DASHBOARD_TOKEN || '',
     },
     defaultPersonality: 'You are a friendly, helpful Discord bot. Keep answers clear and concise.',
