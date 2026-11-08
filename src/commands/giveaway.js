@@ -23,6 +23,17 @@ module.exports = {
             .setName('channel')
             .setDescription('Channel to post in (defaults to this one)')
             .addChannelTypes(ChannelType.GuildText),
+        )
+        .addRoleOption((option) => option.setName('required_role').setDescription('Members must have this role to enter'))
+        .addIntegerOption((option) =>
+          option.setName('min_level').setDescription('Minimum XP level required to enter').setMinValue(1).setMaxValue(500),
+        )
+        .addIntegerOption((option) =>
+          option
+            .setName('min_account_age')
+            .setDescription('Minimum account age in days required to enter')
+            .setMinValue(1)
+            .setMaxValue(3650),
         ),
     )
     .addSubcommand((sub) =>
@@ -56,11 +67,19 @@ module.exports = {
       }
 
       const channel = interaction.options.getChannel('channel') ?? interaction.channel;
+      const requiredRole = interaction.options.getRole('required_role');
+      const minLevel = interaction.options.getInteger('min_level');
+      const minAccountAge = interaction.options.getInteger('min_account_age');
       const g = await startGiveaway(channel, {
         prize: interaction.options.getString('prize', true),
         durationMs,
         winners: interaction.options.getInteger('winners') ?? 1,
         hostId: interaction.user.id,
+        requirements: {
+          roleId: requiredRole?.id ?? null,
+          minLevel: minLevel ?? null,
+          minAccountAgeDays: minAccountAge ?? null,
+        },
       });
       return interaction.reply({
         embeds: [makeEmbed('success', 'Giveaway started', `Giveaway #${g.id} is live in <#${channel.id}>.`)],

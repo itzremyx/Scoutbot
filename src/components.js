@@ -3,6 +3,7 @@ const { claimTicket, closeTicket, createTicket, handleTicketFeedback, MAX_TICKET
 const { handleUnwarnSelect } = require('./commands/warn');
 const { handleUnbanSelect } = require('./commands/moderation');
 const { joinGiveaway } = require('./giveaways');
+const { handleAppealButton } = require('./appeals');
 const { handleHelpEnglish, handleHelpSelect } = require('./help');
 const { makeEmbed, sendLog } = require('./utils');
 
@@ -67,6 +68,7 @@ async function handleComponent(interaction) {
   if (id === 'automod:remove') return handleAutomodRemoveSelect(interaction);
   if (id === 'unban:select') return handleUnbanSelect(interaction);
   if (id.startsWith('giveaway:join:')) return joinGiveaway(interaction);
+  if (id.startsWith('appeal:')) return handleAppealButton(interaction);
   if (id === 'help:select' || id.startsWith('help:select:')) return handleHelpSelect(interaction, require('./loader').allCommands());
   if (id === 'help:english') return handleHelpEnglish(interaction, require('./loader').allCommands());
 }

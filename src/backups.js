@@ -1,7 +1,8 @@
-const { ChannelType } = require('discord.js');
+const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const store = require('./storage');
 
 const MAX_BACKUPS = 5;
+const AUTO_EVERY_MS = 24 * 60 * 60 * 1000;
 // Only plain channel types are restored. Threads, forums and media need extra settings that a snapshot does not hold.
 const RESTORABLE_TYPES = new Set([ChannelType.GuildCategory, ChannelType.GuildText, ChannelType.GuildVoice, ChannelType.GuildAnnouncement, ChannelType.GuildStageVoice]);
 
@@ -49,8 +50,14 @@ function snapshotChannel(channel) {
 }
 
 // Captures roles, categories and channels with their permission overwrites. Stored in store.json.
-function createBackup(guild, name, createdBy) {
+function createBackup(guild, name, createdBy, { auto = false } = {}) {
   const cfg = backupsOf(guild.id);
+  if (auto) {
+    // There is only ever one automatic snapshot: the previous one is replaced.
+    for (const item of Object.values(cfg.items)) {
+      if (item.auto) delete cfg.items[item.id];
+    }
+  }
   if (Object.keys(cfg.items).length >= MAX_BACKUPS) {
     throw new Error(`This server already has ${MAX_BACKUPS} backups. Delete one with \`/backup delete\` first.`);
   }
@@ -60,6 +67,7 @@ function createBackup(guild, name, createdBy) {
   cfg.items[id] = {
     id,
     name,
+    auto,
     createdAt: Date.now(),
     createdBy,
     roles: guild.roles.cache.filter((r) => !r.managed && r.id !== guild.id).map(snapshotRole),
@@ -67,6 +75,45 @@ function createBackup(guild, name, createdBy) {
   };
   store.save();
   return cfg.items[id];
+}
+
+function autoBackupEnabled(guildId) {
+  const guild = store.guild(guildId);
+  return guild.autoBackup !== false;
+}
+
+function setAutoBackup(guildId, enabled) {
+  const guild = store.guild(guildId);
+  guild.autoBackup = enabled;
+  store.save();
+  return enabled;
+}
+
+// Daily structural snapshot per guild. It replaces the previous automatic backup and never
+// touches user-created ones. A full backup list simply skips that day.
+function runAutoBackups(client) {
+  const now = Date.now();
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const record = store.guild(guild.id);
+      if (record.autoBackup === false) continue;
+      if (now - (record.lastAutoBackupAt ?? 0) < AUTO_EVERY_MS) continue;
+      if (!guild.members.me?.permissions.has(PermissionFlagsBits.ManageGuild)) continue;
+      createBackup(guild, 'Automatic backup', client.user.id, { auto: true });
+      record.lastAutoBackupAt = now;
+      store.save();
+    } catch (err) {
+      if (!/already has/.test(err.message)) {
+        console.error(`Automatic backup failed for ${guild.name}:`, err.message);
+      }
+    }
+  }
+}
+
+function startScheduler(client) {
+  const run = () => runAutoBackups(client);
+  run();
+  setInterval(run, 60 * 60 * 1000);
 }
 
 // Recreates roles and channels that are missing. An item counts as present when a role with the same name
@@ -158,4 +205,16 @@ function deleteBackup(guildId, id) {
   return true;
 }
 
-module.exports = { createBackup, restoreBackup, listBackups, findBackup, deleteBackup, MAX_BACKUPS };
+module.exports = {
+  createBackup,
+  restoreBackup,
+  listBackups,
+  findBackup,
+  deleteBackup,
+  autoBackupEnabled,
+  setAutoBackup,
+  runAutoBackups,
+  startScheduler,
+  MAX_BACKUPS,
+  AUTO_EVERY_MS,
+};

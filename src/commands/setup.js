@@ -37,6 +37,7 @@ module.exports = {
       .setDescription('Configure the join welcome and leave farewell')
       .addChannelOption((option) => option.setName('channel').setDescription('Channel to post welcomes and farewells').addChannelTypes(ChannelType.GuildText))
       .addBooleanOption((option) => option.setName('leave').setDescription('Also post a message when someone leaves').setRequired(false))
+      .addBooleanOption((option) => option.setName('dm').setDescription('Also send the welcome card to the member in DM').setRequired(false))
       .addStringOption((option) => option.setName('theme').setDescription('Welcome card theme').addChoices(
         ...WELCOME_THEMES.map((theme) => ({ name: theme, value: theme })),
       )))
@@ -57,7 +58,7 @@ module.exports = {
       const role = current.autoRoleId ? `<@&${current.autoRoleId}>` : 'not set';
       const welcome = welcomeConfig(interaction.guild.id);
       const welcomeSummary = welcome.enabled
-        ? `${mention(welcome.channelId)}${welcome.leaveEnabled ? ' + leaves' : ''}`
+        ? `${mention(welcome.channelId)}${welcome.leaveEnabled ? ' + leaves' : ''}${welcome.dmEnabled !== false ? ' + DM' : ''}`
         : 'disabled';
       return interaction.reply({
         embeds: [makeEmbed('info', 'Server setup', 'These settings belong to this ScoutBot installation.')
@@ -101,16 +102,19 @@ module.exports = {
       const cfg = welcomeConfig(interaction.guild.id);
       const channel = interaction.options.getChannel('channel');
       const leave = interaction.options.getBoolean('leave');
+      const dm = interaction.options.getBoolean('dm');
       const theme = interaction.options.getString('theme');
 
       if (channel) cfg.channelId = channel.id;
       if (leave !== null) cfg.leaveEnabled = leave;
+      if (dm !== null) cfg.dmEnabled = dm;
       if (theme && WELCOME_THEMES.includes(theme)) cfg.theme = theme;
       store.save();
 
       const lines = [];
       if (channel) lines.push(`Welcomes and farewells go to ${channel}.`);
       if (leave !== null) lines.push(leave ? 'Leave farewells are on.' : 'Leave farewells are off.');
+      if (dm !== null) lines.push(dm ? 'Welcome DMs are on.' : 'Welcome DMs are off.');
       if (theme) lines.push(`Welcome card theme is \`${theme}\`.`);
       lines.push(`Join welcomes are ${cfg.enabled ? 'on' : 'off'}.`);
       return interaction.reply({

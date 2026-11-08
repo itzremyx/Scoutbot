@@ -22,10 +22,18 @@ function buildConfig() {
       name: 'Gentra',
       id: process.env.BOT_OWNER_ID || '1561860035158736898',
     },
+    // The single Discord server this installation runs for. Used to register slash commands
+    // and as the fallback target for DM appeals.
+    mainGuildId: process.env.MAIN_GUILD_ID || '1565465623910424586',
     // Health alerts: a Discord webhook (works even before login) and an optional external
     // heartbeat URL (e.g. healthchecks.io) pinged every 5 minutes.
     alertWebhookUrl: process.env.ALERT_WEBHOOK_URL || '',
     healthcheckUrl: process.env.HEALTHCHECK_URL || '',
+    // Minimal read-only status dashboard. Disabled unless a token is set.
+    dashboard: {
+      port: envNumber('DASHBOARD_PORT', 3000),
+      token: process.env.DASHBOARD_TOKEN || '',
+    },
     defaultPersonality: 'You are a friendly, helpful Discord bot. Keep answers clear and concise.',
     ai: {
       apiKey: process.env.AI_API_KEY,

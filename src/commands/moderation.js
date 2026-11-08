@@ -5,8 +5,9 @@ const {
   SlashCommandBuilder,
   StringSelectMenuBuilder,
 } = require('discord.js');
-const { checkTarget, dmUser, fail, fetchMember, hasPerm, makeEmbed, sendLog, truncate } = require('../utils');
+const { checkTarget, dmUser, fail, fetchMember, formatDuration, hasPerm, makeEmbed, sendLog, truncate } = require('../utils');
 const { addModlogEntry } = require('../modlog');
+const { addPunishment, clearForUser, listPunishments, parseDuration } = require('../punishments');
 
 const DAY_MS = 86_400_000;
 const MAX_TIMEOUT_MS = 28 * DAY_MS; // Discord's limit
@@ -50,6 +51,7 @@ async function handleUnbanSelect(interaction) {
 
   const userId = interaction.values[0];
   await interaction.guild.bans.remove(userId, `Unbanned by ${interaction.user.username}`);
+  clearForUser(interaction.guild.id, userId, 'tempban');
   await logModeration(interaction, 'unban', 'Member unbanned', userId, 'Unbanned from the ban list');
   return interaction.update({ content: `✅ Unbanned <@${userId}>.`, components: [] });
 }
@@ -119,7 +121,14 @@ module.exports = {
         if (error) return fail(interaction, error);
       }
 
-      await dmUser(user, makeEmbed('error', `You were banned from ${guild.name}`, `**Reason:** ${reason}`));
+      await dmUser(
+        user,
+        makeEmbed(
+          'error',
+          `You were banned from ${guild.name}`,
+          `**Reason:** ${reason}\n\nTo appeal, reply to this DM with \`appeal <your reason>\`.`,
+        ),
+      );
       await guild.bans.create(user.id, {
         reason: `${reason} (by ${interaction.user.username})`,
         deleteMessageSeconds: deleteDays * DAY_MS / 1000,
@@ -156,6 +165,7 @@ module.exports = {
           .catch(() => false);
         if (!removed) return fail(interaction, 'That user is not banned or the ID is invalid.');
 
+        clearForUser(guild.id, userId, 'tempban');
         await logModeration(interaction, 'unban', 'Member unbanned', userId, 'Unbanned by ID');
         return interaction.reply({ embeds: [makeEmbed('success', 'User unbanned', `<@${userId}> was unbanned.`)] });
       }
@@ -252,9 +262,202 @@ module.exports = {
       if (!member.isCommunicationDisabled()) return fail(interaction, 'That member is not timed out.');
 
       await member.timeout(null, `${reason} (by ${interaction.user.username})`);
+      clearForUser(interaction.guild.id, user.id, 'tempmute');
       await logModeration(interaction, 'untimeout', 'Timeout removed', user.id, reason);
       return interaction.reply({
         embeds: [makeEmbed('success', 'Timeout removed', `<@${user.id}> can talk again.\n**Reason:** ${reason}`)],
+      });
+    },
+  },
+
+  tempban: {
+    guildOnly: true,
+    data: new SlashCommandBuilder()
+      .setName('tempban')
+      .setDescription('Ban a user for a set time, then unban them automatically')
+      .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+      .addUserOption((option) => option.setName('user').setDescription('User to ban').setRequired(true))
+      .addStringOption((option) =>
+        option.setName('duration').setDescription('How long, e.g. 1h, 1d, 7d or 1d 12h (max 30 days)').setRequired(true),
+      )
+      .addStringOption((option) => option.setName('reason').setDescription('Reason').setMaxLength(500))
+      .addIntegerOption((option) =>
+        option.setName('delete_days').setDescription('Days of their messages to delete (0-7)').setMinValue(0).setMaxValue(7),
+      ),
+
+    async execute(interaction) {
+      if (!hasPerm(interaction, PermissionFlagsBits.BanMembers)) {
+        return fail(interaction, 'You need the Ban Members permission to do this.');
+      }
+
+      const { guild } = interaction;
+      const user = interaction.options.getUser('user', true);
+      const reason = interaction.options.getString('reason') ?? DEFAULT_REASON;
+      const deleteDays = interaction.options.getInteger('delete_days') ?? 0;
+      const ms = parseDuration(interaction.options.getString('duration', true));
+      if (!ms) return fail(interaction, 'Invalid duration. Use something like `1h`, `1d`, `7d` or `1d 12h` (1 minute to 30 days).');
+
+      const member = await fetchMember(guild, user.id);
+      if (member) {
+        const error = await checkTarget(guild, interaction.user.id, member);
+        if (error) return fail(interaction, error);
+      }
+
+      const expiresAt = Date.now() + ms;
+      const label = formatDuration(ms);
+      await dmUser(
+        user,
+        makeEmbed(
+          'error',
+          `You were temporarily banned from ${guild.name}`,
+          `**Duration:** ${label}\n**Reason:** ${reason}\n\nTo appeal, reply to this DM with \`appeal <your reason>\`.`,
+        ),
+      );
+      await guild.bans.create(user.id, {
+        reason: `${reason} (by ${interaction.user.username}, ${label})`,
+        deleteMessageSeconds: (deleteDays * DAY_MS) / 1000,
+      });
+      addPunishment(guild.id, { type: 'tempban', userId: user.id, reason, moderatorId: interaction.user.id, expiresAt });
+      await logModeration(
+        interaction,
+        'tempban',
+        'Member temporarily banned',
+        user.id,
+        reason,
+        `\n**Duration:** ${label}\n**Auto-unban:** <t:${Math.floor(expiresAt / 1000)}:R>`,
+      );
+      return interaction.reply({
+        embeds: [
+          makeEmbed(
+            'error',
+            'User temporarily banned',
+            `<@${user.id}> was banned for ${label}.\n**Reason:** ${reason}\n**Auto-unban:** <t:${Math.floor(expiresAt / 1000)}:R>`,
+          ),
+        ],
+      });
+    },
+  },
+
+  tempmute: {
+    guildOnly: true,
+    data: new SlashCommandBuilder()
+      .setName('tempmute')
+      .setDescription('Timeout a member for a set time, tracked as a temporary punishment')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+      .addUserOption((option) => option.setName('user').setDescription('Member to mute').setRequired(true))
+      .addStringOption((option) =>
+        option.setName('duration').setDescription('How long, e.g. 30m, 2h, 7d or 1d 12h (max 28 days)').setRequired(true),
+      )
+      .addStringOption((option) => option.setName('reason').setDescription('Reason').setMaxLength(500)),
+
+    async execute(interaction) {
+      if (!hasPerm(interaction, PermissionFlagsBits.ModerateMembers)) {
+        return fail(interaction, 'You need the Timeout Members permission to do this.');
+      }
+
+      const user = interaction.options.getUser('user', true);
+      const reason = interaction.options.getString('reason') ?? DEFAULT_REASON;
+      const ms = parseDuration(interaction.options.getString('duration', true), MAX_TIMEOUT_MS);
+      if (!ms) return fail(interaction, 'Invalid duration. Use something like `30m`, `2h`, `7d` or `1d 12h` (1 minute to 28 days).');
+
+      const member = await getModeratableMember(interaction, user);
+      if (!member) return;
+
+      const expiresAt = Date.now() + ms;
+      const label = formatDuration(ms);
+      await dmUser(
+        user,
+        makeEmbed('warn', `You were muted in ${interaction.guild.name}`, `**Duration:** ${label}\n**Reason:** ${reason}`),
+      );
+      await member.timeout(ms, `${reason} (by ${interaction.user.username})`);
+      addPunishment(interaction.guild.id, { type: 'tempmute', userId: user.id, reason, moderatorId: interaction.user.id, expiresAt });
+      await logModeration(
+        interaction,
+        'tempmute',
+        'Member temporarily muted',
+        user.id,
+        reason,
+        `\n**Duration:** ${label}\n**Ends:** <t:${Math.floor(expiresAt / 1000)}:R>`,
+      );
+      return interaction.reply({
+        embeds: [
+          makeEmbed(
+            'warn',
+            'Member temporarily muted',
+            `<@${user.id}> is muted for ${label}.\n**Reason:** ${reason}\n**Ends:** <t:${Math.floor(expiresAt / 1000)}:R>`,
+          ),
+        ],
+      });
+    },
+  },
+
+  punishments: {
+    guildOnly: true,
+    data: new SlashCommandBuilder()
+      .setName('punishments')
+      .setDescription('List active temporary bans and mutes')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
+
+    async execute(interaction) {
+      if (!hasPerm(interaction, PermissionFlagsBits.ModerateMembers)) {
+        return fail(interaction, 'You need the Moderate Members permission to do this.');
+      }
+
+      const items = listPunishments(interaction.guild.id);
+      const text = items.length
+        ? items
+            .map(
+              (item) =>
+                `**#${item.id}** ${item.type === 'tempban' ? 'Ban' : 'Mute'} <@${item.userId}> — ends <t:${Math.floor(item.expiresAt / 1000)}:R>\n${truncate(item.reason || DEFAULT_REASON, 200)}`,
+            )
+            .join('\n\n')
+        : 'No temporary punishment is active.';
+      return interaction.reply({ embeds: [makeEmbed('info', 'Active temporary punishments', truncate(text, 4000))] });
+    },
+  },
+
+  pardon: {
+    guildOnly: true,
+    data: new SlashCommandBuilder()
+      .setName('pardon')
+      .setDescription('Lift a temporary ban or mute before it expires')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+      .addUserOption((option) => option.setName('user').setDescription('Member to pardon').setRequired(true))
+      .addStringOption((option) => option.setName('reason').setDescription('Reason').setMaxLength(500)),
+
+    async execute(interaction) {
+      if (!hasPerm(interaction, PermissionFlagsBits.ModerateMembers)) {
+        return fail(interaction, 'You need the Moderate Members permission to do this.');
+      }
+
+      const { guild } = interaction;
+      const user = interaction.options.getUser('user', true);
+      const reason = interaction.options.getString('reason') ?? 'Pardoned';
+      const active = listPunishments(guild.id).filter((item) => item.userId === user.id);
+      if (!active.length) return fail(interaction, 'That user has no active temporary punishment.');
+
+      const removed = [];
+      for (const item of active) {
+        if (item.type === 'tempban') {
+          const unbanned = await guild.bans
+            .remove(user.id, `Pardoned by ${interaction.user.username}`)
+            .then(() => true)
+            .catch(() => false);
+          if (unbanned) removed.push('ban');
+        }
+        if (item.type === 'tempmute') {
+          const member = await fetchMember(guild, user.id);
+          if (member?.isCommunicationDisabled()) {
+            await member.timeout(null, `Pardoned by ${interaction.user.username}`).catch(() => {});
+          }
+          removed.push('mute');
+        }
+      }
+      clearForUser(guild.id, user.id, 'tempban');
+      clearForUser(guild.id, user.id, 'tempmute');
+      await logModeration(interaction, 'pardon', 'Member pardoned', user.id, reason);
+      return interaction.reply({
+        embeds: [makeEmbed('success', 'Member pardoned', `<@${user.id}>: ${removed.join(' and ') || 'punishment'} lifted.\n**Reason:** ${reason}`)],
       });
     },
   },

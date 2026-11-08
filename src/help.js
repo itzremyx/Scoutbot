@@ -7,11 +7,11 @@ const {
 const { isBotOwner, makeEmbed } = require('./utils');
 
 const CATEGORIES = {
-  moderation: { label: 'Moderation', emoji: String.fromCodePoint(0x1F6E1), description: 'Kick, ban, timeouts, warnings, nicknames, raid protection and moderation history', commands: ['kick', 'ban', 'unban', 'timeout', 'untimeout', 'warn', 'unwarn', 'warnings', 'automod', 'modlog', 'nick', 'raid'] },
+  moderation: { label: 'Moderation', emoji: String.fromCodePoint(0x1F6E1), description: 'Kick, ban, temporary punishments, appeals, warnings and moderation history', commands: ['kick', 'ban', 'unban', 'tempban', 'timeout', 'tempmute', 'untimeout', 'punishments', 'pardon', 'appeal', 'warn', 'unwarn', 'warnings', 'automod', 'modlog', 'nick', 'raid'] },
   channels: { label: 'Channels', emoji: String.fromCodePoint(0x1F4AC), description: 'Purge, slowmode, locks, broadcast, sticky messages and polls', commands: ['purge', 'purge-user-time', 'slowmode', 'lock', 'unlock', 'lockdown', 'unlockdown', 'broadcast', 'sticky', 'poll'] },
   levels: { label: 'Levels', emoji: String.fromCodePoint(0x1F4C8), description: 'XP, rank cards and leaderboard', commands: ['rank', 'leaderboard', 'xp', 'levels'] },
-  giveaways: { label: 'Giveaways', emoji: String.fromCodePoint(0x1F389), description: 'Start and manage giveaways', commands: ['giveaway'] },
-  backups: { label: 'Backups', emoji: String.fromCodePoint(0x1F4BE), description: 'Save and restore roles and channels', commands: ['backup'] },
+  giveaways: { label: 'Giveaways', emoji: String.fromCodePoint(0x1F389), description: 'Start and manage giveaways with entry requirements and rerolls', commands: ['giveaway'] },
+  backups: { label: 'Backups', emoji: String.fromCodePoint(0x1F4BE), description: 'Save and restore roles and channels, with daily automatic snapshots', commands: ['backup'] },
   logs: { label: 'Logs', emoji: String.fromCodePoint(0x1F4DC), description: 'Activity logs, setup and transcript search', commands: ['logs', 'setup', 'transcript'] },
   community: { label: 'Community', emoji: String.fromCodePoint(0x1F4A1), description: 'Saved tags, suggestions and translation', commands: ['tag', 'suggest', 'accept', 'decline', 'duplicate', 'translate'] },
   ai: { label: 'AI', emoji: String.fromCodePoint(0x1F916), description: 'Ask questions, draw images, memory and personality', commands: ['ask', 'imagine', 'image-quota', 'prompt-history', 'memory', 'personality'] },

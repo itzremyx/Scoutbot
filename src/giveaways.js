@@ -1,5 +1,6 @@
 const { MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const store = require('./storage');
+const { levelFor } = require('./levels');
 const { makeEmbed, sendLog } = require('./utils');
 
 const UNITS = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 };
@@ -36,6 +37,14 @@ function render(g, ended) {
     .setDisabled(ended);
 
   const lines = [`**Prize:** ${g.prize}`, `**Winners:** ${g.winners}`, `**Hosted by:** <@${g.hostId}>`];
+  const req = g.requirements;
+  if (req) {
+    const parts = [];
+    if (req.roleId) parts.push(`<@&${req.roleId}> role`);
+    if (req.minLevel) parts.push(`level ${req.minLevel}`);
+    if (req.minAccountAgeDays) parts.push(`account ${req.minAccountAgeDays} day(s) old`);
+    if (parts.length) lines.push(`**Requirements:** ${parts.join(', ')}`);
+  }
   let embed;
   if (ended) {
     const winners = g.winnerIds.length ? g.winnerIds.map((id) => `<@${id}>`).join(', ') : 'No valid entries';
@@ -50,7 +59,7 @@ function render(g, ended) {
   return { embeds: [embed], components: [new ActionRowBuilder().addComponents(button)] };
 }
 
-async function startGiveaway(channel, { prize, durationMs, winners, hostId }) {
+async function startGiveaway(channel, { prize, durationMs, winners, hostId, requirements = null }) {
   const cfg = giveawayConfig(channel.guild.id);
   const id = cfg.nextGiveawayId;
   cfg.nextGiveawayId += 1;
@@ -62,6 +71,7 @@ async function startGiveaway(channel, { prize, durationMs, winners, hostId }) {
     prize,
     winners,
     hostId,
+    requirements: requirements && Object.values(requirements).some(Boolean) ? requirements : null,
     endsAt: Date.now() + durationMs,
     entries: [],
     winnerIds: [],
@@ -85,12 +95,38 @@ function pickWinners(entries, count) {
   return picked;
 }
 
+// Returns a user-facing reason when the member does not meet the giveaway requirements.
+function requirementError(member, g) {
+  const req = g.requirements;
+  if (!req) return null;
+
+  if (req.roleId && !member.roles.cache.has(req.roleId)) {
+    return `You need the <@&${req.roleId}> role to enter this giveaway.`;
+  }
+  if (req.minLevel) {
+    const xp = store.guild(member.guild.id).levels?.users?.[member.id]?.xp ?? 0;
+    const level = levelFor(xp);
+    if (level < req.minLevel) return `You need to be at least level ${req.minLevel} to enter (you are level ${level}).`;
+  }
+  if (req.minAccountAgeDays) {
+    const ageDays = (Date.now() - member.user.createdTimestamp) / 86_400_000;
+    if (ageDays < req.minAccountAgeDays) {
+      return `Your account must be at least ${req.minAccountAgeDays} day(s) old to enter.`;
+    }
+  }
+  return null;
+}
+
 async function joinGiveaway(interaction) {
   const id = Number(interaction.customId.split(':')[2]);
   const g = findGiveaway(interaction.guild.id, id);
   if (!g || g.ended) {
     return interaction.reply({ content: 'This giveaway has ended.', flags: MessageFlags.Ephemeral });
   }
+
+  const member = interaction.member ?? (await interaction.guild.members.fetch(interaction.user.id).catch(() => null));
+  const blocked = member ? requirementError(member, g) : 'Could not check your membership in this server.';
+  if (blocked) return interaction.reply({ content: blocked, flags: MessageFlags.Ephemeral });
 
   const userId = interaction.user.id;
   const joined = !g.entries.includes(userId);
@@ -176,6 +212,7 @@ function startScheduler(client) {
 
 module.exports = {
   parseDuration,
+  requirementError,
   findGiveaway,
   giveawayConfig,
   startGiveaway,

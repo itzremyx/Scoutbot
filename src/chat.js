@@ -132,8 +132,21 @@ function register(client) {
       }
     }
 
-
-
+    // Banned members cannot run slash commands in the server, so a DM starting with
+    // "appeal <reason>" is accepted as an appeal shortcut.
+    if (isDM && /^appeal\b/i.test(raw)) {
+      const appeals = require('./appeals');
+      const reason = raw.replace(/^appeal\b/i, '').trim();
+      if (!reason) {
+        await message.reply('To appeal, send: `appeal <your reason>` (at least 10 characters).').catch(() => {});
+        return;
+      }
+      const result = await appeals
+        .submitAppeal(client, message.author, reason, { source: 'dm' })
+        .catch(() => ({ error: 'Something went wrong while submitting your appeal. Try again later.' }));
+      await message.reply(result.error ?? result.message).catch(() => {});
+      return;
+    }
 
     // question is null when the message was not meant for the bot (no mention, no reply to it,
     // not the AI channel) — stay silent instead of pinging back in every channel. This also

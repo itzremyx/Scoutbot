@@ -1,4 +1,5 @@
 const config = require('./config');
+const health = require('./health');
 const store = require('./storage');
 
 const lastRequest = new Map();
@@ -20,12 +21,14 @@ function state() {
     totalImageCalls: 0,
   });
   budget.imageUsers ??= {};
+  budget.alerted ??= {};
   if (budget.day !== today()) {
     budget.day = today();
     budget.tokensToday = 0;
     budget.callsToday = 0;
     budget.imageCallsToday = 0;
     budget.imageUsers = {};
+    budget.alerted = {};
   }
   return budget;
 }
@@ -63,6 +66,35 @@ function checkCooldown(userId) {
   }
 }
 
+// DMs the owner once per UTC day when the token or image budget crosses 80% and 100%.
+function maybeAlert(budget) {
+  const alerted = budget.alerted;
+  const notify = (flag, title, description) => {
+    if (alerted[flag]) return;
+    alerted[flag] = true;
+    health.alertOwner(title, description, { key: `ai-budget-${flag}` }).catch(() => {});
+  };
+
+  const tokenLimit = limit();
+  if (Number.isFinite(tokenLimit) && tokenLimit > 0) {
+    const ratio = budget.tokensToday / tokenLimit;
+    if (ratio >= 1) {
+      notify('tokens100', 'AI daily token limit reached', `Today's AI usage is at ${budget.tokensToday.toLocaleString('en-US')} of ${tokenLimit.toLocaleString('en-US')} tokens. Further requests are blocked until 00:00 UTC.`);
+    } else if (ratio >= 0.8) {
+      notify('tokens80', 'AI daily token budget at 80%', `Today's AI usage is at ${budget.tokensToday.toLocaleString('en-US')} of ${tokenLimit.toLocaleString('en-US')} tokens.`);
+    }
+  }
+
+  const images = imageLimit();
+  if (Number.isFinite(images) && images > 0) {
+    if (budget.imageCallsToday >= images) {
+      notify('images100', 'AI daily image limit reached', `Today's image usage is at ${budget.imageCallsToday} of ${images}. Further image requests are blocked until 00:00 UTC.`);
+    } else if (budget.imageCallsToday / images >= 0.8) {
+      notify('images80', 'AI daily image budget at 80%', `Today's image usage is at ${budget.imageCallsToday} of ${images}.`);
+    }
+  }
+}
+
 function record(tokens) {
   const budget = state();
   budget.tokensToday += tokens;
@@ -70,6 +102,7 @@ function record(tokens) {
   budget.totalTokens += tokens;
   budget.totalCalls += 1;
   store.save();
+  maybeAlert(budget);
 }
 
 function userImageCount(userId) {
@@ -109,6 +142,7 @@ function recordImages(count, userId) {
   budget.totalImageCalls += count;
   if (userId !== undefined) budget.imageUsers[String(userId)] = userImageCount(userId) + count;
   store.save();
+  maybeAlert(budget);
 }
 
 function status(userId) {

@@ -45,3 +45,10 @@ ScoutBot commit posts need `View Channel`, `Send Messages` and `Embed Links` in 
 - `/translate` translates text into a chosen language
 - Tickets idle for 48 hours close automatically, with the transcript sent to the log channel and the opener. A 1-5 star feedback form follows in DM and the rating is posted to the logs.
 - Anti-nuke watches the audit log for destructive bursts and alerts the owner; alt detection only reports suspicious new accounts to the logs. Both take no punitive action on their own.
+- `/tempban` and `/tempmute` expire automatically (survive restarts); `/punishments` lists them and `/pardon` lifts one early.
+- `/appeal` (or replying to the bot in DM with `appeal <reason>`) sends an appeal to the log channel with Accept/Deny buttons for staff.
+- Welcome cards are posted in the welcome channel and sent to the new member in DM (`/setup welcome dm:`).
+- `/giveaway start` supports a required role, a minimum level and a minimum account age; `/giveaway reroll` picks new winners.
+- `/backup` keeps 5 manual snapshots plus one daily automatic snapshot (`/backup auto`).
+- The AI budget DMs the owner at 80% and 100% of the daily token and image limits.
+- Set `DASHBOARD_TOKEN` to expose a small read-only status page (and AI pause switch) on `DASHBOARD_PORT`.

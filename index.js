@@ -24,6 +24,10 @@ const tickets = require('./src/tickets');
 const health = require('./src/health');
 const antinuke = require('./src/antinuke');
 const alts = require('./src/alts');
+const punishments = require('./src/punishments');
+const appeals = require('./src/appeals');
+const backups = require('./src/backups');
+const dashboard = require('./src/dashboard');
 const { fail, isBotOwner } = require('./src/utils');
 
 if (!config.token) {
@@ -84,14 +88,17 @@ function friendlyError(err) {
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
   await presence.apply(c);
-  const GUILD_ID = "1565465623910424586";
-  const count = await loader.registerCommands(c, GUILD_ID);
+  const count = await loader.registerCommands(c, config.mainGuildId);
   console.log(`Registered ${count} slash commands. Global commands can take up to an hour to show up.`);
   giveaways.startScheduler(c);
   levels.startScheduler(c);
   reminders.startScheduler(c);
   digest.startScheduler(c);
   tickets.startScheduler(c);
+  punishments.startScheduler(c);
+  backups.startScheduler(c);
+  appeals.startScheduler(c);
+  dashboard.start(c);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

@@ -132,6 +132,29 @@ test('helpPayload is ephemeral and provides categories in English by default', (
   assert.ok(payload.components.length >= 1);
 });
 
+test('punishments.parseDuration accepts combined units and rejects junk', () => {
+  const { parseDuration } = require('../src/punishments');
+  assert.strictEqual(parseDuration('90s'), 90_000);
+  assert.strictEqual(parseDuration('1h 30m'), 5_400_000);
+  assert.strictEqual(parseDuration('7d'), 7 * 86_400_000);
+  assert.strictEqual(parseDuration('nope'), null);
+  assert.strictEqual(parseDuration('10s'), null); // below the one-minute floor
+  assert.strictEqual(parseDuration('31d'), null); // above the 30-day ceiling
+});
+
+test('giveaways.requirementError enforces role and account age', () => {
+  const { requirementError } = require('../src/giveaways');
+  const member = {
+    id: 'u1',
+    roles: { cache: { has: () => false } },
+    user: { createdTimestamp: Date.now() - 10 * 86_400_000 },
+    guild: { id: 'g1' },
+  };
+  assert.match(requirementError(member, { requirements: { roleId: 'r1' } }), /role/);
+  assert.match(requirementError(member, { requirements: { minAccountAgeDays: 30 } }), /account/);
+  assert.strictEqual(requirementError(member, { requirements: null }), null);
+});
+
 test('link command has valid name, description, and required code option', () => {
   const link = require('../src/commands/link');
   assert.ok(link.data);

@@ -1,5 +1,5 @@
 const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
-const { createBackup, deleteBackup, findBackup, listBackups, restoreBackup, MAX_BACKUPS } = require('../backups');
+const { autoBackupEnabled, createBackup, deleteBackup, findBackup, listBackups, restoreBackup, setAutoBackup, MAX_BACKUPS } = require('../backups');
 const { fail, hasPerm, makeEmbed } = require('../utils');
 
 module.exports = {
@@ -14,6 +14,12 @@ module.exports = {
         .addStringOption((o) => o.setName('name').setDescription('Label for this backup').setMaxLength(50)),
     )
     .addSubcommand((sub) => sub.setName('list').setDescription('List saved backups'))
+    .addSubcommand((sub) =>
+      sub
+        .setName('auto')
+        .setDescription('Enable or disable the daily automatic backup')
+        .addBooleanOption((o) => o.setName('enabled').setDescription('Turn daily automatic backups on or off').setRequired(true)),
+    )
     .addSubcommand((sub) =>
       sub
         .setName('restore')
@@ -58,12 +64,35 @@ module.exports = {
 
     if (sub === 'list') {
       const items = listBackups(guild.id);
+      const auto = autoBackupEnabled(guild.id) ? 'on' : 'off';
       const text = items.length
         ? items
-            .map((b) => `**#${b.id}** ${b.name}: ${b.roles.length} roles, ${b.channels.length} channels (<t:${Math.floor(b.createdAt / 1000)}:R>)`)
+            .map(
+              (b) =>
+                `**#${b.id}** ${b.name}${b.auto ? ' (automatic)' : ''}: ${b.roles.length} roles, ${b.channels.length} channels (<t:${Math.floor(b.createdAt / 1000)}:R>)`,
+            )
             .join('\n')
         : 'No backup yet. Use `/backup create`.';
-      return interaction.reply({ embeds: [makeEmbed('info', 'Backups', text)], flags: MessageFlags.Ephemeral });
+      return interaction.reply({
+        embeds: [makeEmbed('info', 'Backups', `${text}\n\nDaily automatic backup: **${auto}**`)],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    if (sub === 'auto') {
+      const enabled = setAutoBackup(guild.id, interaction.options.getBoolean('enabled', true));
+      return interaction.reply({
+        embeds: [
+          makeEmbed(
+            'success',
+            'Automatic backup updated',
+            enabled
+              ? 'A structural snapshot will be saved every 24 hours, replacing the previous automatic one.'
+              : 'Daily automatic backups are now off. Existing backups are kept.',
+          ),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     const id = interaction.options.getInteger('id', true);

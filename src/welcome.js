@@ -52,7 +52,8 @@ async function invitedBy(member) {
 // theme: null means "use the levels theme", so the cards stay in the same visual language.
 function welcomeConfig(guildId) {
   const guild = store.guild(guildId);
-  guild.welcome ??= { enabled: true, leaveEnabled: false, channelId: null, theme: null };
+  guild.welcome ??= { enabled: true, leaveEnabled: false, channelId: null, theme: null, dmEnabled: true };
+  if (guild.welcome.dmEnabled === undefined) guild.welcome.dmEnabled = true;
   return guild.welcome;
 }
 
@@ -63,21 +64,33 @@ function channelFor(guild, cfg) {
 }
 
 // The welcome card is rendered with the levels theme, matching the level-up announcements.
+// The same card is also sent in DM (optional) so the member keeps it even if they miss the channel.
 async function welcomeMember(guild, member) {
   const cfg = welcomeConfig(guild.id);
   if (!cfg.enabled) return;
-  const channel = channelFor(guild, cfg);
-  if (!channel?.isTextBased()) return;
   const levelsTheme = store.guild(guild.id).levels?.theme;
   const inviter = await invitedBy(member).catch(() => null);
+  const username = member.user.globalName ?? member.user.username;
   const png = await renderWelcomeCard({
-    username: member.user.globalName ?? member.user.username,
+    username,
     avatarUrl: member.user.displayAvatarURL({ extension: 'png', size: 256 }),
     themeId: cfg.theme ?? levelsTheme ?? 'claude',
     memberCount: guild.memberCount,
     joinDate: member.joinedTimestamp ?? member.user.createdTimestamp,
     invitedBy: inviter,
   }).catch(() => null);
+
+  if (cfg.dmEnabled !== false) {
+    const dmFiles = png ? [new AttachmentBuilder(png, { name: 'welcome.png' })] : [];
+    const dmText =
+      `Welcome to **${guild.name}**, ${username}!` +
+      (guild.memberCount > 1 ? ` You are member #${guild.memberCount}.` : '') +
+      '\n\nTake a moment to read the rules and enjoy your stay.';
+    await member.user.send({ content: dmText, files: dmFiles }).catch(() => {});
+  }
+
+  const channel = channelFor(guild, cfg);
+  if (!channel?.isTextBased()) return;
   const files = png ? [new AttachmentBuilder(png, { name: 'welcome.png' })] : [];
   const count = guild.memberCount > 1 ? ' — you are member #' + guild.memberCount + '.' : '.';
   await channel
