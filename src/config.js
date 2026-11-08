@@ -46,10 +46,10 @@ function buildConfig() {
       dailyTokenLimit: envNumber('AI_DAILY_TOKEN_LIMIT', 1_000_000),
       cooldownSeconds: envNumber('AI_COOLDOWN_SECONDS', 5),
     },
-    aiChannelId: process.env.AI_CHANNEL_ID || '1566503029916700752',
+    aiChannelId: process.env.AI_CHANNEL_ID || '1568689660245450993',
     updateChannelId: process.env.UPDATE_CHANNEL_ID || '1566490353748680814',
     changelogChannelId: process.env.CHANGELOG_CHANNEL_ID || '1566490537006202880',
-    botRepoChannelId: process.env.BOT_REPO_CHANNEL_ID || '1567292394116751390',
+    botRepoChannelId: process.env.BOT_REPO_CHANNEL_ID || '1568689855284777144',
     // Role given to every member who joins (set by /role all; 0 = disabled).
     autoRoleId: process.env.AUTO_ROLE_ID || '1566953972290289764',
     // ScoutRadio: rename the voice channel while a track plays, and feed YouTube either a
@@ -65,28 +65,40 @@ function buildConfig() {
   };
 }
 
-const config = buildConfig();
+let config = buildConfig();
 
 // /setup stores these on the single server the bot runs for, and they win over the .env defaults
 // so a change applies on the next read without editing the environment or restarting.
-const storeOverrides = { aiChannelId: "aiChannelId", botRepoChannelId: "botRepoChannelId", autoRoleId: "autoRoleId" };
-for (const key of Object.keys(storeOverrides)) {
-  const fallback = config[key];
-  Object.defineProperty(config, key, {
-    configurable: true,
-    enumerable: true,
-    get() {
-      const saved = require("./storage").data.settings?.[storeOverrides[key]];
-      return saved ? String(saved) : fallback;
-    },
-  });
-}
+const storeOverrides = { aiChannelId: 'aiChannelId', botRepoChannelId: 'botRepoChannelId', autoRoleId: 'autoRoleId' };
 
+// The .env fallbacks are kept aside instead of being read from `config` itself, because the
+// getters below overwrite those keys on `config`: a reload has to update the fallbacks, not try
+// to assign a getter-only property (that throws "has only a getter").
+let fallbacks = {};
+function applyStoreGetters(source) {
+  for (const [key, storeKey] of Object.entries(storeOverrides)) {
+    fallbacks[key] = source[key];
+    Object.defineProperty(config, key, {
+      configurable: true,
+      enumerable: true,
+      get() {
+        const saved = require('./storage').data.settings?.[storeKey];
+        return saved ? String(saved) : fallbacks[key];
+      },
+    });
+  }
+}
+applyStoreGetters(config);
 
 // Reload environment-backed values without creating a second config object in modules that require it.
 config.reload = () => {
   dotenv.config({ path: envPath, override: true });
-  Object.assign(config, buildConfig());
+  const fresh = buildConfig();
+  const overridden = new Set(Object.keys(storeOverrides));
+  for (const [key, value] of Object.entries(fresh)) {
+    if (!overridden.has(key)) config[key] = value;
+  }
+  applyStoreGetters(fresh);
   return config;
 };
 
