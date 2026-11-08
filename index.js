@@ -22,6 +22,8 @@ const raid = require('./src/raid');
 const afk = require('./src/afk');
 const tickets = require('./src/tickets');
 const health = require('./src/health');
+const antinuke = require('./src/antinuke');
+const alts = require('./src/alts');
 const { fail, isBotOwner } = require('./src/utils');
 
 if (!config.token) {
@@ -68,6 +70,8 @@ raid.register(client);
 afk.register(client);
 tickets.register(client);
 health.register(client);
+antinuke.register(client);
+alts.register(client);
 
 function friendlyError(err) {
   if (err.code === 50013) return 'I am missing the permissions needed for this action.';

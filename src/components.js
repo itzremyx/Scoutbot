@@ -1,5 +1,5 @@
 const { MessageFlags, PermissionFlagsBits } = require('discord.js');
-const { claimTicket, closeTicket, createTicket, MAX_TICKETS_PER_CATEGORY, TICKET_TYPES } = require('./tickets');
+const { claimTicket, closeTicket, createTicket, handleTicketFeedback, MAX_TICKETS_PER_CATEGORY, TICKET_TYPES } = require('./tickets');
 const { handleUnwarnSelect } = require('./commands/warn');
 const { handleUnbanSelect } = require('./commands/moderation');
 const { joinGiveaway } = require('./giveaways');
@@ -56,6 +56,13 @@ async function handleComponent(interaction) {
   if (id === 'ticket:select') return handleTicketSelect(interaction);
   if (id === 'ticket:claim') return claimTicket(interaction);
   if (id === 'ticket:close') return closeTicket(interaction);
+  if (id.startsWith('ticket:feedback:')) return handleTicketFeedback(interaction);
+  if (id === 'suggestion:vote') {
+    return interaction.reply({
+      content: 'Vote with 👍 or 👎 on the first message of this post.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
   if (id.startsWith('unwarn:select:')) return handleUnwarnSelect(interaction);
   if (id === 'automod:remove') return handleAutomodRemoveSelect(interaction);
   if (id === 'unban:select') return handleUnbanSelect(interaction);

@@ -5,6 +5,7 @@ const {
   ButtonStyle,
   ChannelType,
   Events,
+  MessageFlags,
   PermissionFlagsBits,
   StringSelectMenuBuilder,
 } = require('discord.js');
@@ -82,6 +83,19 @@ const TICKET_CHECK_EVERY_MS = 10 * 60 * 1000;
 const closing = new Set();
 
 const lastActivityOf = (ticket) => ticket.lastActivity ?? ticket.createdAt ?? 0;
+
+// One rating button per star. The custom id carries everything the DM handler needs, because the
+// ticket channel is already deleted when the member answers.
+function feedbackRow(ticket, guildId) {
+  return new ActionRowBuilder().addComponents(
+    [1, 2, 3, 4, 5].map((rating) =>
+      new ButtonBuilder()
+        .setCustomId(`ticket:feedback:${guildId}:${ticket.type}:${ticket.userId}:${rating}`)
+        .setLabel(`${rating} ★`)
+        .setStyle(ButtonStyle.Secondary),
+    ),
+  );
+}
 
 // Records activity in a ticket channel. Writes at most once a minute per ticket so a busy
 // conversation does not rewrite the store on every message.
@@ -293,6 +307,14 @@ async function closeTicketChannel(client, guild, channel, ticket, closedBy, reas
         })
         .then(() => true)
         .catch(() => false);
+
+      // A short feedback form follows the transcript, so the rating always reaches the log channel.
+      await opener
+        .send({
+          content: `How was your **${TICKET_TYPES[ticket.type]?.label ?? ''}** ticket handled? Rate your experience from 1 to 5 stars.`,
+          components: [feedbackRow(ticket, guild.id)],
+        })
+        .catch(() => {});
     }
 
     if (!logged && !delivered) {
@@ -394,6 +416,49 @@ async function claimTicket(interaction) {
   return interaction.reply({ embeds: [makeEmbed('success', 'Ticket claimed', `<@${user.id}> is handling this ticket.`)] });
 }
 
+// Handles the 1-5 star buttons sent in the opener's DM after a ticket closes. The rating is stored
+// on the guild record and posted to the activity log.
+async function handleTicketFeedback(interaction) {
+  const [, , guildId, type, openerId, ratingRaw] = interaction.customId.split(':');
+  if (interaction.user.id !== openerId) {
+    return interaction.reply({ content: 'This feedback form is not for you.', flags: MessageFlags.Ephemeral });
+  }
+  const rating = Number(ratingRaw);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return interaction.reply({ content: 'That rating is not valid.', flags: MessageFlags.Ephemeral });
+  }
+
+  const guild = interaction.client.guilds.cache.get(guildId)
+    ?? await interaction.client.guilds.fetch(guildId).catch(() => null);
+
+  // The rating is stored even if the guild is not cached, so feedback is never lost.
+  const settings = store.guild(guildId);
+  settings.feedback ??= [];
+  settings.feedback.push({ userId: openerId, type, rating, at: Date.now() });
+  if (settings.feedback.length > 500) settings.feedback.splice(0, settings.feedback.length - 500);
+  store.save();
+
+  if (guild) {
+    const label = TICKET_TYPES[type]?.label ?? type;
+    const stars = '⭐'.repeat(rating) + '☆'.repeat(5 - rating);
+    await sendLog(guild, {
+      embeds: [
+        makeEmbed(
+          'info',
+          'Ticket feedback',
+          `**Member:** <@${openerId}>\n**Category:** ${label}\n**Rating:** ${stars} (${rating}/5)`,
+        ),
+      ],
+    });
+  }
+
+  return interaction.update({
+    content: `Thank you for your feedback: ${'⭐'.repeat(rating)} (${rating}/5).`,
+    embeds: [],
+    components: [],
+  });
+}
+
 module.exports = {
   TICKET_TYPES,
   MAX_TICKETS_PER_CATEGORY,
@@ -408,4 +473,5 @@ module.exports = {
   register,
   startScheduler,
   claimTicket,
+  handleTicketFeedback,
 };

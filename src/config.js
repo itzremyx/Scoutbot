@@ -50,6 +50,8 @@ function buildConfig() {
     updateChannelId: process.env.UPDATE_CHANNEL_ID || '1566490353748680814',
     changelogChannelId: process.env.CHANGELOG_CHANNEL_ID || '1566490537006202880',
     botRepoChannelId: process.env.BOT_REPO_CHANNEL_ID || '1568689855284777144',
+    // Forum channel used by /suggest.
+    suggestionChannelId: process.env.SUGGESTION_CHANNEL_ID || '1566492469393227866',
     // Role given to every member who joins (set by /role all; 0 = disabled).
     autoRoleId: process.env.AUTO_ROLE_ID || '1566953972290289764',
     // ScoutRadio: rename the voice channel while a track plays, and feed YouTube either a

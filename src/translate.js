@@ -15,37 +15,50 @@ function likelyEnglish(text) {
   return ENGLISH.test(source);
 }
 
-// One cheap, tool-free call. Returns null when the text is already English, the model is
-// unreachable, or it hands the text back unchanged — a missing translation must never block a reply.
-async function translateToEnglish(text) {
+function clean(value) {
+  return String(value || '')
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .trim()
+    .replace(/^["']|["']$/g, '');
+}
+
+// One cheap, tool-free call to the AI endpoint. Returns null when the model is unreachable or
+// hands the text back unchanged.
+async function translateText(text, target = 'English') {
   const source = String(text || '').trim();
-  if (!source || likelyEnglish(source) || !config.ai.apiKey) return null;
+  if (!source || !config.ai.apiKey) return null;
   try {
     const response = await fetch(`${config.ai.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.ai.apiKey}` },
       body: JSON.stringify({
         model: config.ai.fallbackModel || config.ai.model,
-        max_completion_tokens: 600,
+        max_completion_tokens: 800,
         reasoning_effort: 'low',
         messages: [
-          { role: 'system', content: 'Translate the user message into natural English. Return only the translation, with no quotes or commentary. If it is already English, return it unchanged.' },
-          { role: 'user', content: source.slice(0, 2000) },
+          { role: 'system', content: `Translate the user message into ${target}. Return only the translation, with no quotes or commentary. If it is already in ${target}, return it unchanged.` },
+          { role: 'user', content: source.slice(0, 3000) },
         ],
       }),
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(25_000),
     });
     if (!response.ok) return null;
     const data = await response.json().catch(() => ({}));
-    const translated = String(data.choices?.[0]?.message?.content || '')
-      .replace(/<think>[\s\S]*?<\/think>/g, '')
-      .trim()
-      .replace(/^["']|["']$/g, '');
-    if (!translated || translated.toLowerCase() === source.toLowerCase()) return null;
-    return translated;
+    const translated = clean(data.choices?.[0]?.message?.content);
+    return translated || null;
   } catch {
     return null;
   }
 }
 
-module.exports = { likelyEnglish, translateToEnglish };
+// Kept for chat.js: it only translates when the message looks foreign, so an English reply never
+// gets a redundant translation line.
+async function translateToEnglish(text) {
+  const source = String(text || '').trim();
+  if (!source || likelyEnglish(source) || !config.ai.apiKey) return null;
+  const translated = await translateText(source, 'English');
+  if (!translated || translated.toLowerCase() === source.toLowerCase()) return null;
+  return translated;
+}
+
+module.exports = { likelyEnglish, translateText, translateToEnglish };

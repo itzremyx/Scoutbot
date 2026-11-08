@@ -39,4 +39,9 @@ ScoutBot commit posts need `View Channel`, `Send Messages` and `Embed Links` in 
 - `/setup` configures logs, tickets and levels
 - `/memory` manages user facts, server rules and pending approvals
 - `/doctor` checks channels, permissions, the AI endpoint and stored data (bot owner only)
-- Tickets idle for 48 hours close automatically, with the transcript sent to the log channel and the opener
+- `/tag` stores reusable answers (`show`, `list`, `add`, `edit`, `remove`)
+- `/suggest` opens a forum post with votes; staff use `/accept`, `/decline` or `/duplicate` inside it
+- `/transcript search` looks through archived ticket transcripts
+- `/translate` translates text into a chosen language
+- Tickets idle for 48 hours close automatically, with the transcript sent to the log channel and the opener. A 1-5 star feedback form follows in DM and the rating is posted to the logs.
+- Anti-nuke watches the audit log for destructive bursts and alerts the owner; alt detection only reports suspicious new accounts to the logs. Both take no punitive action on their own.
