@@ -27,6 +27,17 @@ function migrate() {
     }
   }
 
+  // Tickets opened before inactivity tracking have no lastActivity. Give them a fresh 48-hour
+  // window from this boot instead of closing them immediately because createdAt is old.
+  for (const guild of Object.values(store.data.guilds)) {
+    for (const ticket of Object.values(guild?.tickets ?? {})) {
+      if (ticket && ticket.lastActivity == null) {
+        ticket.lastActivity = Date.now();
+        changed = true;
+      }
+    }
+  }
+
   // botRepo.lastSha advanced to dc31ea0 while the changelog channel was still the dead one,
   // so the commits after ddbf8ce never reached any channel. Rewind the cursor to the last
   // commit that was actually posted; the normal tick reposts the whole gap and
