@@ -614,7 +614,9 @@ function drawOverview(range){
   chart(document.getElementById('chart-rss'),points,'rss','#8b5cf6');
   chart(document.getElementById('chart-tokens'),tokenDeltas(points),'value','#2ecc71');
 }
+var __tick=0;
 async function refreshOverview(){
+  __tick++;
   try{
     var res=await fetch('/api/status',{cache:'no-store'});
     if(!res.ok)return;
@@ -636,6 +638,7 @@ async function refreshOverview(){
     var aiState=document.getElementById('ai-state'); if(aiState)aiState.textContent=data.ai.paused?'paused':'active';
     var btn=document.getElementById('toggle'); if(btn){btn.dataset.paused=data.ai.paused?'true':'false';btn.textContent=data.ai.paused?'Resume AI':'Pause AI';}
   }catch(e){}
+  if(__tick%15!==1)return;
   try{
     var range=window.__RANGE__||'24h';
     var r=await fetch('/api/history?range='+encodeURIComponent(range),{cache:'no-store'});
@@ -663,7 +666,7 @@ document.addEventListener('DOMContentLoaded',function(){
       });
     })(buttons[i]);
   }
-  if(document.getElementById('chart-ping')){drawOverview();setInterval(refreshOverview,15000);}
+  if(document.getElementById('chart-ping')){drawOverview();setInterval(refreshOverview,1000);}
 });
 `;
 
