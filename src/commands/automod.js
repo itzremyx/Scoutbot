@@ -1,12 +1,14 @@
 const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder, StringSelectMenuBuilder, ActionRowBuilder } = require('discord.js');
 const store = require('../storage');
 const { automodConfig, MAX_WORDS, WORD_MAX_LENGTH } = require('../automod');
+const { phishConfig } = require('../antiphish');
 const { fail, hasPerm, makeEmbed, truncate } = require('../utils');
 
 const MAX_TIMEOUT_MINUTES = 4032; // Discord's limit: 28 days
 
 function statusEmbed(guildId) {
   const config = automodConfig(guildId);
+  const phish = phishConfig(guildId);
   const words = config.words.length
     ? config.words.map((w) => `**${w}**`).join(', ')
     : '_none yet_';
@@ -18,6 +20,7 @@ function statusEmbed(guildId) {
       truncate(words, 1000),
       '',
       `**Escalation:** warning at each hit, timeout of **${config.timeoutMinutes} min** from **warning ${config.timeoutAt}**.`,
+      `**Anti-phishing:** ${phish.enabled ? 'on' : 'off'}${phish.timeoutMinutes > 0 ? ` (timeout ${phish.timeoutMinutes} min)` : ' (delete only)'}.`,
       'Moderators with Manage Messages are never caught by the filter.',
     ].join('\n'),
   );
@@ -56,6 +59,19 @@ module.exports = {
         )
         .addIntegerOption((option) =>
           option.setName('minutes').setDescription('Timeout length in minutes').setRequired(true).setMinValue(1).setMaxValue(MAX_TIMEOUT_MINUTES),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('phishing')
+        .setDescription('Configure anti-phishing link detection')
+        .addBooleanOption((option) => option.setName('enabled').setDescription('Turn anti-phishing on or off').setRequired(true))
+        .addIntegerOption((option) =>
+          option
+            .setName('timeout_minutes')
+            .setDescription('Timeout an offender this many minutes, 0 = delete only')
+            .setMinValue(0)
+            .setMaxValue(MAX_TIMEOUT_MINUTES),
         ),
     ),
 
@@ -142,6 +158,27 @@ module.exports = {
             'success',
             'Escalation updated',
             `Members are now timed out **${config.timeoutMinutes} min** when they reach warning **${config.timeoutAt}**.`,
+          ),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    if (sub === 'phishing') {
+      const phish = phishConfig(interaction.guild.id);
+      phish.enabled = interaction.options.getBoolean('enabled', true);
+      const timeout = interaction.options.getInteger('timeout_minutes');
+      if (timeout !== null) phish.timeoutMinutes = timeout;
+      store.save();
+      return interaction.reply({
+        embeds: [
+          makeEmbed(
+            'success',
+            'Anti-phishing updated',
+            `Anti-phishing is now **${phish.enabled ? 'on' : 'off'}**.` +
+              (phish.timeoutMinutes > 0
+                ? ` Offenders are timed out for **${phish.timeoutMinutes} min**.`
+                : ' Flagged messages are deleted without a timeout.'),
           ),
         ],
         flags: MessageFlags.Ephemeral,

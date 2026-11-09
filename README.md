@@ -47,8 +47,10 @@ ScoutBot commit posts need `View Channel`, `Send Messages` and `Embed Links` in 
 - Anti-nuke watches the audit log for destructive bursts and alerts the owner; alt detection only reports suspicious new accounts to the logs. Both take no punitive action on their own.
 - `/tempban` and `/tempmute` expire automatically (survive restarts); `/punishments` lists them and `/pardon` lifts one early.
 - `/appeal` (or replying to the bot in DM with `appeal <reason>`) sends an appeal to the log channel with Accept/Deny buttons for staff.
+- `/automod phishing` toggles the built-in anti-phishing filter: known scam hosts, shortened links paired with scam bait and suspicious TLDs are deleted and logged. Staff with Manage Messages are exempt; an optional timeout can be set per caught message.
+- Every Monday at 09:00 UTC the bot DMs the owner a weekly report (members, tickets, feedback, moderation, AI usage, security events, backups and uptime).
 - Welcome cards are posted in the welcome channel and sent to the new member in DM (`/setup welcome dm:`).
 - `/giveaway start` supports a required role, a minimum level and a minimum account age; `/giveaway reroll` picks new winners.
 - `/backup` keeps 5 manual snapshots plus one daily automatic snapshot (`/backup auto`).
 - The AI budget DMs the owner at 80% and 100% of the daily token and image limits.
-- Set `DASHBOARD_TOKEN` to expose a small read-only status page (and AI pause switch) on `DASHBOARD_PORT`.
+- Set `DASHBOARD_TOKEN` to enable the admin dashboard on `DASHBOARD_PORT`. It has a login page (the token is the password, stored in a signed HttpOnly cookie), overview and history charts, the server breakdown, tickets with a readable transcript viewer, an activity feed, a health page and real controls (reload config, sync commands, reset AI usage, create a backup, prune old transcripts, restart). The same token still works as an `Authorization: Bearer` header for scripts.

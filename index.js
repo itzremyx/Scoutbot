@@ -27,6 +27,10 @@ const alts = require('./src/alts');
 const punishments = require('./src/punishments');
 const appeals = require('./src/appeals');
 const backups = require('./src/backups');
+const antiphish = require('./src/antiphish');
+const metrics = require('./src/metrics');
+const stats = require('./src/stats');
+const weeklyreport = require('./src/weeklyreport');
 const dashboard = require('./src/dashboard');
 const { fail, isBotOwner } = require('./src/utils');
 
@@ -76,6 +80,7 @@ tickets.register(client);
 health.register(client);
 antinuke.register(client);
 alts.register(client);
+antiphish.register(client);
 
 function friendlyError(err) {
   if (err.code === 50013) return 'I am missing the permissions needed for this action.';
@@ -98,6 +103,9 @@ client.once(Events.ClientReady, async (c) => {
   punishments.startScheduler(c);
   backups.startScheduler(c);
   appeals.startScheduler(c);
+  metrics.startScheduler(c);
+  stats.startScheduler();
+  weeklyreport.startScheduler(c);
   dashboard.start(c);
 });
 
@@ -112,6 +120,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (command.ownerOnly && !(await isBotOwner(client, interaction.user.id))) {
         return fail(interaction, 'Only the bot owner can use this command.');
       }
+      stats.recordCommand(interaction.commandName);
       return await command.execute(interaction);
     }
 

@@ -1,6 +1,7 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const config = require('./config');
 const store = require('./storage');
+const activity = require('./activity');
 const { makeEmbed, dmUser, truncate } = require('./utils');
 const { clearForUser, listPunishments } = require('./punishments');
 
@@ -52,6 +53,13 @@ function createAppeal(guildId, { userId, username, reason, source }) {
     reviewedAt: null,
   };
   store.save();
+  activity.record(guildId, {
+    kind: 'appeal',
+    title: `Appeal #${id} submitted`,
+    detail: `**User:** <@${userId}>\n**Source:** ${source === 'dm' ? 'Direct message' : 'Server command'}\n${truncate(reason, 400)}`,
+    userId,
+    meta: { appealId: id, source },
+  });
   return { appeal: cfg.items[id] };
 }
 
@@ -149,6 +157,14 @@ async function handleAppealButton(interaction) {
   appeal.reviewedBy = interaction.user.id;
   appeal.reviewedAt = Date.now();
   store.save();
+
+  activity.record(interaction.guild.id, {
+    kind: 'appeal',
+    title: `Appeal #${id} ${appeal.status}`,
+    detail: `**User:** <@${appeal.userId}>\n**Reviewed by:** <@${interaction.user.id}>`,
+    userId: appeal.userId,
+    meta: { appealId: id, decision: appeal.status },
+  });
 
   if (appeal.status === 'accepted') {
     await interaction.guild.bans.remove(appeal.userId, `Appeal #${id} accepted by ${interaction.user.tag}`).catch(() => {});

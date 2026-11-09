@@ -146,5 +146,9 @@ module.exports = {
   register,
   alertOwner,
   probeAi,
+  status: () => ({
+    lastAlerts: [...lastAlert.entries()].map(([key, at]) => ({ key, at })).sort((a, b) => b.at - a.at),
+    tracked: lastAlert.size,
+  }),
   notify: (title, description, options) => alertOwner(title, description, options),
 };

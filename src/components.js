@@ -60,7 +60,7 @@ async function handleComponent(interaction) {
   if (id.startsWith('ticket:feedback:')) return handleTicketFeedback(interaction);
   if (id === 'suggestion:vote') {
     return interaction.reply({
-      content: 'Vote with 👍 or 👎 on the first message of this post.',
+      content: `Vote with ${String.fromCodePoint(0x1f44d)} or ${String.fromCodePoint(0x1f44e)} on the first message of this post.`,
       flags: MessageFlags.Ephemeral,
     });
   }

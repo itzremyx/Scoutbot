@@ -31,6 +31,7 @@ const ACTION_LABEL = {
   nickname: 'Nickname changed',
   raid: 'Raid mode',
   invite_link: 'Invite link removed',
+  phishing: 'Phishing link removed',
   lockdown: 'Server locked down',
   unlockdown: 'Lockdown off',
 };

@@ -14,6 +14,7 @@ const path = require('path');
 const config = require('./config');
 const store = require('./storage');
 const health = require('./health');
+const activity = require('./activity');
 const { fail, makeEmbed, sendLog } = require('./utils');
 
 const TICKET_TYPES = {
@@ -189,6 +190,13 @@ async function createTicket(guild, user, type) {
   store.save();
 
   const info = TICKET_TYPES[type];
+  activity.record(guild.id, {
+    kind: 'ticket_opened',
+    title: 'Ticket opened',
+    detail: `**Channel:** ${channel.name}\n**Type:** ${info.label}\n**Opened by:** <@${user.id}>`,
+    userId: user.id,
+    meta: { channelId: channel.id, type, channelName: channel.name },
+  });
   const controls = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('ticket:claim')
@@ -260,7 +268,30 @@ async function saveTranscript(channel, ticket, closedBy) {
   fs.mkdirSync(config.transcriptDir, { recursive: true });
   const filePath = path.join(config.transcriptDir, name);
   fs.writeFileSync(filePath, [...header, ...lines].join('\n') + '\n', 'utf8');
-  return { path: filePath, name };
+
+  // A small JSON sidecar lets the dashboard list and filter transcripts without parsing the
+  // plain-text log every time. Older transcripts are still read from their header as a fallback.
+  const meta = {
+    name,
+    channelName: channel.name,
+    channelId: channel.id,
+    type: ticket.type,
+    typeLabel: TICKET_TYPES[ticket.type]?.label ?? ticket.type,
+    userId: ticket.userId,
+    claimedBy: ticket.claimedBy ?? null,
+    closedById: closedBy?.id ?? null,
+    closedByName: closedBy?.username ?? 'unknown',
+    createdAt: ticket.createdAt,
+    closedAt: Date.now(),
+    messages: messages.length,
+    pinned: pinned.size,
+  };
+  try {
+    fs.writeFileSync(path.join(config.transcriptDir, name.replace(/\.txt$/, '.json')), JSON.stringify(meta, null, 2));
+  } catch (err) {
+    console.error('Transcript metadata failed:', err.message);
+  }
+  return { path: filePath, name, meta };
 }
 
 // Closes a ticket channel once, whichever path asked (button, command or the inactivity
@@ -278,6 +309,21 @@ async function closeTicketChannel(client, guild, channel, ticket, closedBy, reas
     });
     delete settings.tickets[channel.id];
     store.save();
+
+    activity.record(guild.id, {
+      kind: 'ticket_closed',
+      title: 'Ticket closed',
+      detail: `**Channel:** ${channel.name}\n**Type:** ${TICKET_TYPES[ticket.type]?.label ?? ticket.type}\n**Opened by:** <@${ticket.userId}>\n**Closed by:** ${closedBy?.username ?? 'staff'}${reason ? `\n**Reason:** ${reason}` : ''}`,
+      userId: ticket.userId,
+      meta: {
+        channelId: channel.id,
+        type: ticket.type,
+        transcript: transcript?.name ?? null,
+        openedAt: ticket.createdAt,
+        closedById: closedBy?.id ?? null,
+        reason: reason ?? null,
+      },
+    });
 
     const transcriptFiles = () =>
       transcript ? [new AttachmentBuilder(transcript.path, { name: transcript.name })] : [];
@@ -437,6 +483,14 @@ async function handleTicketFeedback(interaction) {
   settings.feedback.push({ userId: openerId, type, rating, at: Date.now() });
   if (settings.feedback.length > 500) settings.feedback.splice(0, settings.feedback.length - 500);
   store.save();
+
+  activity.record(guildId, {
+    kind: 'feedback',
+    title: 'Ticket feedback',
+    detail: `**Member:** <@${openerId}>\n**Category:** ${TICKET_TYPES[type]?.label ?? type}\n**Rating:** ${rating}/5`,
+    userId: openerId,
+    meta: { type, rating },
+  });
 
   if (guild) {
     const label = TICKET_TYPES[type]?.label ?? type;
