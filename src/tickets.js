@@ -291,6 +291,28 @@ async function saveTranscript(channel, ticket, closedBy) {
   } catch (err) {
     console.error('Transcript metadata failed:', err.message);
   }
+
+  // Structured messages keep mentions and attachments intact so the dashboard can render them
+  // properly instead of showing raw IDs and URLs.
+  const structured = messages.map((message) => ({
+    at: message.createdAt.toISOString(),
+    author: message.author.username,
+    authorId: message.author.id ?? null,
+    text: message.content || '',
+    pinned: pinnedIds.has(message.id),
+    embeds: message.embeds.length,
+    attachments: [...message.attachments.values()].map((file) => ({
+      url: file.url,
+      name: file.name ?? null,
+      contentType: file.contentType ?? null,
+    })),
+    mentions: [...message.mentions.users.values()].map((user) => ({ id: user.id, name: user.username })),
+  }));
+  try {
+    fs.writeFileSync(path.join(config.transcriptDir, name.replace(/\.txt$/, '.messages.json')), JSON.stringify(structured));
+  } catch (err) {
+    console.error('Transcript messages failed:', err.message);
+  }
   return { path: filePath, name, meta };
 }
 

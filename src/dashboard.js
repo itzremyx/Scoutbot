@@ -36,6 +36,30 @@ let probeCache = { at: 0, value: null };
 const esc = (text) =>
   String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
+function resolveUserName(id) {
+  const client = clientRef;
+  const user = client?.users?.cache?.get(id) ?? client?.guilds?.cache?.get(config.mainGuildId)?.members?.cache?.get(id)?.user;
+  return user?.username ?? null;
+}
+
+function extractMentions(text) {
+  const ids = new Set();
+  for (const match of String(text ?? '').matchAll(/<@!?(\d+)>/g)) ids.add(match[1]);
+  return [...ids].map((id) => ({ id, name: resolveUserName(id) }));
+}
+
+function normalizeMessages(messages) {
+  return messages.map((message) => ({
+    at: message.at ?? null,
+    author: message.author ?? 'unknown',
+    text: message.text ?? '',
+    pinned: Boolean(message.pinned),
+    embeds: Number(message.embeds ?? 0) || 0,
+    attachments: Array.isArray(message.attachments) ? message.attachments : [],
+    mentions: Array.isArray(message.mentions) && message.mentions.length ? message.mentions : extractMentions(message.text),
+  }));
+}
+
 const fmt = (n) => Number(n ?? 0).toLocaleString('en-US');
 
 const safeJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
@@ -215,23 +239,51 @@ function readTranscript(name) {
   const lines = text.split(/\r?\n/);
   const divider = lines.findIndex((line) => line.startsWith('----'));
   const header = parseHeader(text, safe);
+  const messages = normalizeMessages(loadStructuredMessages(safe) ?? parseMessages(lines, divider));
+  return { meta: { ...header, size: Buffer.byteLength(text) }, messages, text };
+}
+
+// Structured log written next to the .txt for recent tickets; older tickets fall back to parsing.
+function loadStructuredMessages(safe) {
+  try {
+    const raw = fs.readFileSync(path.join(config.transcriptDir, safe.replace(/\.txt$/, '.messages.json')), 'utf8');
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseMessages(lines, divider) {
   const messages = [];
   const pattern = /^\[([^\]]+)\] ([^:]+): (.*)$/;
   for (const line of lines.slice(divider + 1)) {
     const match = line.match(pattern);
     if (match) {
       const pinned = /\s📌$/.test(match[3]);
-      messages.push({
-        at: match[1],
-        author: match[2],
-        text: pinned ? match[3].replace(/\s📌$/, '') : match[3],
-        pinned,
-      });
+      let text = pinned ? match[3].replace(/\s📌$/, '') : match[3];
+      let embeds = 0;
+      let attachments = [];
+      const embedMatch = text.match(/\s*\[embeds:\s*(\d+)\]/);
+      if (embedMatch) {
+        embeds = Number(embedMatch[1]);
+        text = text.replace(embedMatch[0], '');
+      }
+      const attachMatch = text.match(/\s*\[attachments:\s*([\s\S]*?)\]/);
+      if (attachMatch) {
+        attachments = attachMatch[1]
+          .split(/\s*,\s*(?=https?:\/\/)/)
+          .map((url) => url.trim())
+          .filter(Boolean)
+          .map((url) => ({ url, name: null, contentType: null }));
+        text = text.replace(attachMatch[0], '');
+      }
+      messages.push({ at: match[1], author: match[2], text: text.trim(), pinned, embeds, attachments, mentions: [] });
     } else if (messages.length && /^ {4}/.test(line)) {
       messages[messages.length - 1].text += '\n' + line.slice(4);
     }
   }
-  return { meta: { ...header, size: Buffer.byteLength(text) }, messages, text };
+  return messages;
 }
 
 // ---------------------------------------------------------------- data
@@ -538,6 +590,13 @@ tbody tr:hover{background:rgba(255,255,255,.025)}
 .bubble .meta{font-size:10.5px;color:var(--muted);font-weight:500}
 .bubble .text{font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .bubble.pinned{border-color:rgba(245,166,35,.4);box-shadow:inset 0 0 0 1px rgba(245,166,35,.15)}
+.mention{color:#aab3ff;background:rgba(91,108,255,.16);border-radius:5px;padding:0 4px;font-weight:600}
+.attachments{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}
+.att{display:block;border-radius:9px;overflow:hidden;border:1px solid var(--border);line-height:0}
+.att img{display:block;max-width:280px;max-height:220px;width:auto;height:auto}
+.att-file{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#aab3ff;border:1px solid var(--border);border-radius:8px;padding:6px 10px;text-decoration:none}
+.att-file::before{content:'\\1F4CE'}
+.embeds{margin-top:8px;font-size:11px;color:var(--muted)}
 .transcript-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
 .transcript-head .avatar{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-weight:700}
 .notice{position:fixed;right:22px;bottom:22px;z-index:60;max-width:360px;padding:13px 16px;border-radius:12px;background:var(--panel-2);border:1px solid var(--border);box-shadow:0 12px 30px rgba(0,0,0,.4);font-size:13px;opacity:0;transform:translateY(10px);transition:.2s;pointer-events:none}
@@ -891,15 +950,63 @@ function renderTickets(list, query = '') {
   return layout({ active: 'tickets', title: 'Tickets & transcripts', subtitle: query ? `Search: ${query}` : 'Archive', content, ready: data.ready, data });
 }
 
+function renderMessageText(message) {
+  const text = String(message.text ?? '');
+  if (!text) return '';
+  const names = new Map((message.mentions ?? []).map((mention) => [String(mention.id), mention.name]));
+  let out = '';
+  let last = 0;
+  const pattern = /<@!?(\d+)>|<@&(\d+)>|<#(\d+)>/g;
+  let match;
+  while ((match = pattern.exec(text))) {
+    out += esc(text.slice(last, match.index));
+    if (match[1] !== undefined) {
+      out += `<span class="mention">@${esc(names.get(match[1]) || match[1])}</span>`;
+    } else if (match[2] !== undefined) {
+      out += '<span class="mention">@role</span>';
+    } else {
+      out += `<span class="mention">#${esc(match[3])}</span>`;
+    }
+    last = match.index + match[0].length;
+  }
+  out += esc(text.slice(last));
+  return out;
+}
+
+function renderAttachments(message) {
+  const files = message.attachments ?? [];
+  if (!files.length) return '';
+  const items = files
+    .map((file) => {
+      const url = String(file.url ?? '');
+      if (!url) return '';
+      const clean = url.split('?')[0];
+      const name = esc(file.name || clean.split('/').pop() || 'file');
+      const image = String(file.contentType ?? '').startsWith('image/') || /\.(?:png|jpe?g|gif|webp|avif|bmp)$/i.test(clean);
+      if (image) {
+        return `<a class="att" href="${esc(clean)}" target="_blank" rel="noopener noreferrer"><img src="${esc(clean)}" alt="${name}" loading="lazy"></a>`;
+      }
+      return `<a class="att-file" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${name}</a>`;
+    })
+    .filter(Boolean)
+    .join('');
+  return items ? `<div class="attachments">${items}</div>` : '';
+}
+
 function renderTranscript(transcript, data) {
   const { meta, messages, text } = transcript;
   const body = messages
-    .map(
-      (message) => `<div class="bubble-row"><div class="bubble ${message.pinned ? 'pinned' : ''}">
-        <div class="author">${esc(message.author)} <span class="meta">${esc(String(message.at).replace('T', ' ').slice(0, 16))}</span>${message.pinned ? ' <span class="badge warn" style="padding:1px 6px">pinned</span>' : ''}</div>
-        <div class="text">${esc(message.text)}</div>
-      </div></div>`,
-    )
+    .map((message) => {
+      const body = renderMessageText(message);
+      const embeds = message.embeds ? `<div class="embeds">${fmt(message.embeds)} embed${message.embeds === 1 ? '' : 's'}</div>` : '';
+      const empty = !body && !message.attachments?.length && !message.embeds ? '<span class="muted">no text</span>' : '';
+      return `<div class="bubble-row"><div class="bubble ${message.pinned ? 'pinned' : ''}">
+        <div class="author">${esc(message.author)} <span class="meta">${esc(String(message.at ?? '').replace('T', ' ').slice(0, 16))}</span>${message.pinned ? ' <span class="badge warn" style="padding:1px 6px">pinned</span>' : ''}</div>
+        ${body || empty ? `<div class="text">${body || empty}</div>` : ''}
+        ${renderAttachments(message)}
+        ${embeds}
+      </div></div>`;
+    })
     .join('');
   const content = `
     <div class="page-head">
@@ -909,7 +1016,7 @@ function renderTranscript(transcript, data) {
       </div>
     </div>
     <div class="panel"><div class="kv" style="margin-bottom:18px">
-      <div class="kv-item"><div class="k">Opened by</div><div class="v mono">${esc(meta.userId || 'unknown')}</div></div>
+      <div class="kv-item"><div class="k">Opened by</div><div class="v">${esc((meta.userId && resolveUserName(String(meta.userId))) || meta.userId || 'unknown')}</div></div>
       <div class="kv-item"><div class="k">Opened</div><div class="v">${dateLabel(meta.createdAt)}</div></div>
       <div class="kv-item"><div class="k">Closed by</div><div class="v">${esc(meta.closedByName || 'unknown')}</div></div>
       <div class="kv-item"><div class="k">Closed</div><div class="v">${dateLabel(meta.closedAt)}</div></div>
