@@ -36,11 +36,25 @@ const commandCount = () => commands.size;
 const allCommands = () => [...commands.values()];
 const handleComponent = (interaction) => components.handleComponent(interaction);
 
+// Remember the registration scope so a reload never registers a second copy of the commands
+// (guild commands and global commands coexist in the application, which shows duplicates).
+let registeredGuildId = null;
+
 async function registerCommands(client, guildId) {
+  registeredGuildId = guildId || null;
   const payload = commands.map((command) => command.data.toJSON());
-  if (guildId) {
-    const guild = client.guilds.cache.get(guildId) || await client.guilds.fetch(guildId);
+  if (registeredGuildId) {
+    const guild = client.guilds.cache.get(registeredGuildId) || await client.guilds.fetch(registeredGuildId);
     await guild.commands.set(payload);
+    // This bot is single-guild: commands were historically registered both as guild commands and
+    // as global commands (by older reloads), which shows duplicates in Discord. Clear the global
+    // list so only the guild-scoped copy exists.
+    try {
+      await client.application.commands.set([]);
+    } catch {
+      // Global commands may not exist or the bot may not have rights to clear them; the guild
+      // list above is the source of truth.
+    }
   } else {
     await client.application.commands.set(payload);
   }

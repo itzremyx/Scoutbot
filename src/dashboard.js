@@ -13,6 +13,7 @@ const stats = require('./stats');
 const activity = require('./activity');
 const backups = require('./backups');
 const controls = require('./controls');
+const security = require('./security');
 const { labelOf } = require('./modlog');
 const { formatDuration } = require('./utils');
 
@@ -78,6 +79,15 @@ function ago(at) {
 }
 
 const dateLabel = (at) => (at ? new Date(at).toISOString().replace('T', ' ').slice(0, 16) + ' UTC' : '—');
+
+function untilLabel(at) {
+  if (!at) return '—';
+  const diff = at - Date.now();
+  if (diff <= 0) return 'expired';
+  const minutes = Math.ceil(diff / 60_000);
+  if (minutes < 60) return `in ${minutes}m`;
+  return `in ${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
 
 function pct(value, limit) {
   if (!limit || !Number.isFinite(limit) || limit <= 0) return null;
@@ -335,6 +345,7 @@ function baseData() {
       imageLimit: Number.isFinite(ai.imageLimit) ? ai.imageLimit : null,
     },
     stats: stats.snapshot(),
+    security: security.summary(),
     metrics: metrics.latest(),
     transcriptCount: transcriptList.length,
     transcriptBytes: transcriptList.reduce((sum, item) => sum + (item.size ?? 0), 0),
@@ -469,6 +480,7 @@ const ICONS = {
   tickets: '<path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2.5a2.5 2.5 0 0 0 0 5V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2.5a2.5 2.5 0 0 0 0-5z"/><path d="M12 5v14" stroke-dasharray="2 3"/>',
   activity: '<path d="M3 12h4l3 8 4-16 3 8h4"/>',
   health: '<path d="M3 12h4l2-5 4 12 2-7h6"/>',
+  security: '<path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
   controls: '<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
 };
@@ -555,6 +567,7 @@ tbody tr:hover{background:rgba(255,255,255,.025)}
 .btn:active{transform:translateY(1px)}
 .btn.ghost{background:rgba(255,255,255,.05);box-shadow:none;border:1px solid var(--border);color:var(--text)}
 .btn.ghost:hover{background:rgba(255,255,255,.09)}
+.btn.ghost.active{background:rgba(91,108,255,.18);border-color:rgba(91,108,255,.45);color:#c7cdff}
 .btn.danger{background:linear-gradient(135deg,#e04455,#ff5566);box-shadow:0 6px 16px rgba(255,85,102,.25)}
 .btn.small{padding:6px 11px;font-size:11.5px;border-radius:8px}
 .input{width:100%;font:inherit;font-size:13.5px;color:var(--text);background:var(--bg-2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;outline:none;transition:.15s}
@@ -606,6 +619,12 @@ tbody tr:hover{background:rgba(255,255,255,.025)}
 .muted{color:var(--muted)}
 .mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
 .spacer{height:19px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px}
+.word-list{display:flex;flex-wrap:wrap;gap:8px}
+.word-chip{display:inline-flex;align-items:center;gap:7px;background:rgba(255,85,102,.12);border:1px solid rgba(255,85,102,.3);color:#ffadb5;border-radius:999px;padding:4px 6px 4px 12px;font-size:12px;font-weight:600;margin:0}
+.word-x{font:inherit;font-size:14px;font-weight:800;line-height:1;color:#ffadb5;background:rgba(255,255,255,.06);border:0;border-radius:999px;width:18px;height:18px;cursor:pointer;display:grid;place-items:center;padding:0}
+.word-x:hover{background:rgba(255,255,255,.16)}
+.filters{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
 footer{padding:22px 30px 40px;color:#5c6579;font-size:11.5px;text-align:center}
 @media(max-width:860px){
  .sidebar{position:static;width:100%;flex:none;flex-direction:row;align-items:center;overflow-x:auto;padding:12px;gap:14px}
@@ -711,6 +730,33 @@ async function toggleAi(){
   if(res.ok){showNotice(paused?'AI paused.':'AI resumed.',true);refreshOverview();}
   else showNotice('Request failed ('+res.status+')',false);
 }
+async function submitJson(form){
+  var data={};
+  var fd=new FormData(form);
+  fd.forEach(function(value,key){
+    if(value===''||value==null)return;
+    if(value==='true')data[key]=true;
+    else if(value==='false')data[key]=false;
+    else if(!isNaN(value)&&String(value).trim()!=='')data[key]=Number(value);
+    else data[key]=value;
+  });
+  var endpoint=form.getAttribute('data-endpoint');
+  var res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  var body={}; try{body=await res.json();}catch(e){}
+  showNotice(body.message||(res.ok?'Saved.':'Request failed ('+res.status+')'),res.ok&&body.ok!==false);
+  if(res.ok&&body.ok!==false)setTimeout(function(){location.reload();},700);
+}
+async function loadHistory(range){
+  try{
+    var res=await fetch('/api/history?range='+encodeURIComponent(range),{cache:'no-store'});
+    if(!res.ok)return;
+    var hist=await res.json();
+    window.__HISTORY__=hist.points; window.__RANGE__=range;
+    drawOverview();
+    var btns=document.querySelectorAll('[data-range]');
+    for(var i=0;i<btns.length;i++)btns[i].classList.toggle('active',btns[i].getAttribute('data-range')===range);
+  }catch(e){}
+}
 document.addEventListener('DOMContentLoaded',function(){
   var toggle=document.getElementById('toggle'); if(toggle)toggle.addEventListener('click',toggleAi);
   var buttons=document.querySelectorAll('[data-control]');
@@ -724,6 +770,14 @@ document.addEventListener('DOMContentLoaded',function(){
         post(action).finally(function(){btn.disabled=false;});
       });
     })(buttons[i]);
+  }
+  var forms=document.querySelectorAll('form[data-endpoint]');
+  for(var f=0;f<forms.length;f++){
+    (function(form){form.addEventListener('submit',function(event){event.preventDefault();submitJson(form);});})(forms[f]);
+  }
+  var ranges=document.querySelectorAll('[data-range]');
+  for(var r=0;r<ranges.length;r++){
+    (function(btn){btn.addEventListener('click',function(){loadHistory(btn.getAttribute('data-range'));});})(ranges[r]);
   }
   if(document.getElementById('chart-ping')){drawOverview();setInterval(refreshOverview,1000);}
 });
@@ -750,6 +804,7 @@ function layout({ active, title, subtitle, content, ready, data }) {
       ${navItem('/', 'Overview', 'overview', active === 'overview')}
       ${navItem('/server', 'Server', 'server', active === 'server')}
       ${navItem('/activity', 'Activity', 'activity', active === 'activity')}
+      ${navItem('/security', 'Security', 'security', active === 'security')}
       ${navItem('/health', 'Health', 'health', active === 'health')}
       <div class="nav-label">Support</div>
       ${navItem('/tickets', 'Tickets & transcripts', 'tickets', active === 'tickets')}
@@ -826,10 +881,16 @@ function renderOverview(data, historyPoints) {
       ${kpi('Open appeals', 'kpi-appeals', fmt(data.openAppeals))}
       ${kpi('Commands', 'kpi-commands', fmt(data.commands))}
       ${kpi('AI model', 'kpi-model', esc(data.ai.model), `${fmt(data.ai.callsToday)} calls today`)}
+      ${kpi('Raid mode', 'kpi-raid', data.security.raidActive ? '<span class="bad">ACTIVE</span>' : data.security.raidEnabled ? '<span class="warn-t">Armed</span>' : '<span class="ok">Off</span>', `${fmt(data.security.raidActions)} member(s) handled`)}
+      ${kpi('Phishing (24h)', 'kpi-phish', fmt(data.security.phishingToday), `${fmt(data.security.blockedWords)} blocked word(s)`)}
     </div>
 
     <div class="section">
-      <div class="section-head"><h4>Performance · last 24 hours</h4><span class="muted" style="font-size:12px">Samples every minute</span></div>
+      <div class="section-head"><h4>Performance</h4><div style="display:flex;gap:7px">
+        <button class="btn ghost small" data-range="1h">1h</button>
+        <button class="btn ghost small active" data-range="24h">24h</button>
+        <button class="btn ghost small" data-range="7d">7d</button>
+      </div></div>
       <div class="grid-2">
         <div class="panel"><div class="ai-item"><div class="top"><span class="name">WebSocket ping</span><span class="num" id="kpi-ping2">${data.metrics.avgPing24h ?? '—'} ms avg</span></div><div class="chart" id="chart-ping"></div></div></div>
         <div class="panel"><div class="ai-item"><div class="top"><span class="name">Memory (RSS)</span><span class="num">${data.memoryMb} MB</span></div><div class="chart" id="chart-rss"></div></div></div>
@@ -865,6 +926,11 @@ function renderServer(detail, data) {
     return layout({ active: 'server', title: 'Server', content: '<div class="panel"><div class="empty" style="height:160px">The server is not cached yet. Try again in a moment.</div></div>', ready: data.ready, data });
   }
   const cfg = detail.config;
+  const channelList = [...(guildRef()?.channels?.cache?.values?.() ?? [])]
+    .filter((channel) => channel.type === 0 || channel.type === 5 || channel.type === 2)
+    .slice(0, 300)
+    .map((channel) => `<option value="${esc(channel.id)}">${esc(channel.name ?? channel.id)}</option>`)
+    .join('');
   const content = `
     <div class="page-head">
       <div class="transcript-head" style="margin-bottom:0">
@@ -895,6 +961,23 @@ function renderServer(detail, data) {
         <div class="kv-item"><div class="k">Anti-phishing</div><div class="v">${cfg.antiphish.enabled ? '<span class="badge ok">on</span>' : '<span class="badge muted">off</span>'} <span class="muted">${cfg.antiphish.timeoutMinutes > 0 ? `timeout ${cfg.antiphish.timeoutMinutes}m` : 'delete only'}</span></div></div>
         <div class="kv-item"><div class="k">Ticket feedback</div><div class="v">${fmt(detail.feedbackCount)} rating(s)</div></div>
       </div></div>
+    </div>
+
+    <div class="section">
+      <div class="panel">
+        <div class="section-head"><h4>Edit configuration</h4><span class="muted" style="font-size:12px">Changes apply immediately</span></div>
+        <form data-endpoint="/api/server/config">
+          <datalist id="channel-ids">${channelList}</datalist>
+          <div class="form-grid">
+            <div class="field"><label>Log channel ID</label><input class="input" name="logChannelId" list="channel-ids" value="${esc(cfg.logChannelId ?? '')}" placeholder="Channel ID"></div>
+            <div class="field"><label>AI channel ID</label><input class="input" name="aiChannelId" list="channel-ids" value="${esc(cfg.aiChannelId ?? '')}" placeholder="Channel ID"></div>
+            <div class="field"><label>Welcome channel ID</label><input class="input" name="welcomeChannelId" list="channel-ids" value="${esc(cfg.welcome.channelId ?? '')}" placeholder="Channel ID"></div>
+            <div class="field"><label>Welcome messages</label><select class="input" name="welcomeEnabled"><option value="true"${cfg.welcome.enabled ? ' selected' : ''}>Enabled</option><option value="false"${cfg.welcome.enabled ? '' : ' selected'}>Disabled</option></select></div>
+            <div class="field"><label>Welcome DM</label><select class="input" name="welcomeDm"><option value="true"${cfg.welcome.dmEnabled ? ' selected' : ''}>Enabled</option><option value="false"${cfg.welcome.dmEnabled ? '' : ' selected'}>Disabled</option></select></div>
+          </div>
+          <div class="actions"><div class="state">Leave a channel ID empty to unset it. Auto-moderation and anti-phishing are on the Security page.</div><button class="btn" type="submit">Save configuration</button></div>
+        </form>
+      </div>
     </div>
 
     <div class="section">
@@ -936,7 +1019,7 @@ function renderTickets(list, query = '') {
     })
     .join('');
   const content = `
-    <div class="page-head"><div><h3>Tickets & transcripts</h3><p>${list.length} archived conversation(s), newest first.</p></div></div>
+    <div class="page-head"><div><h3>Tickets & transcripts</h3><p>${list.length} archived conversation(s), newest first.</p></div><a class="btn ghost small" href="/api/export/transcripts.csv">Export CSV</a></div>
     <form class="search" method="get" action="/tickets">
       <input class="input" type="search" name="q" value="${esc(query)}" placeholder="Search transcripts by keyword, member id or channel…">
       <button class="btn" type="submit">Search</button>
@@ -1026,11 +1109,25 @@ function renderTranscript(transcript, data) {
   return layout({ active: 'tickets', title: 'Transcript', subtitle: `#${meta.channelName}`, content, ready: data.ready, data });
 }
 
-function renderActivity(items, data) {
+function renderActivity(items, data, kind = null) {
+  const filters = [
+    ['', 'All'],
+    ['security', 'Security'],
+    ['moderation', 'Moderation'],
+    ['ticket_opened', 'Tickets opened'],
+    ['ticket_closed', 'Tickets closed'],
+    ['appeal', 'Appeals'],
+    ['control', 'Controls'],
+    ['feedback', 'Feedback'],
+  ];
+  const tabs = filters
+    .map(([value, label]) => `<a class="btn ghost small ${String(kind ?? '') === value ? 'active' : ''}" href="/activity${value ? `?kind=${value}` : ''}">${label}</a>`)
+    .join('');
   const content = `
-    <div class="page-head"><div><h3>Activity</h3><p>Tickets, appeals, moderation, security and dashboard changes.</p></div><a class="btn ghost small" href="/tickets">Transcripts</a></div>
+    <div class="page-head"><div><h3>Activity</h3><p>${kind ? `Filtered: ${esc(kind)}.` : 'Tickets, appeals, moderation, security and dashboard changes.'}</p></div><a class="btn ghost small" href="/api/export/activity.csv">Export CSV</a></div>
+    <div class="filters">${tabs}</div>
     <div class="panel">${feedHtml(items)}</div>`;
-  return layout({ active: 'activity', title: 'Activity', subtitle: 'Server journal', content, ready: data.ready, data });
+  return layout({ active: 'activity', title: 'Activity', subtitle: kind ? `Activity · ${kind}` : 'Server journal', content, ready: data.ready, data });
 }
 
 function renderHealth(h, data) {
@@ -1067,6 +1164,115 @@ function renderHealth(h, data) {
     </div></div>`;
   return layout({ active: 'health', title: 'Health', subtitle: 'Diagnostics', content, ready: data.ready, data });
 }
+
+function renderSecurity(sec, data) {
+  const select = (name, value, options) =>
+    `<select class="input" name="${name}">${options
+      .map(([optionValue, label]) => `<option value="${esc(optionValue)}"${String(optionValue) === String(value) ? ' selected' : ''}>${esc(label)}</option>`)
+      .join('')}</select>`;
+  const number = (name, value, min, max) =>
+    `<input class="input" type="number" name="${name}" value="${esc(value)}" min="${min}" max="${max}">`;
+  const events = sec.events.map((event) => ({ kind: 'security', ...event }));
+  const raidTone = sec.raid.active ? 'bad' : sec.raid.enabled ? 'warn-t' : 'ok';
+  const words = sec.automod.words.length
+    ? sec.automod.words
+        .map(
+          (word) => `<form data-endpoint="/api/security/words" class="word-chip">
+            <span>${esc(word)}</span>
+            <input type="hidden" name="action" value="remove">
+            <input type="hidden" name="word" value="${esc(word)}">
+            <button class="word-x" type="submit" title="Remove ${esc(word)}">×</button>
+          </form>`,
+        )
+        .join('')
+    : '<span class="muted">No blocked word yet.</span>';
+
+  const content = `
+    <div class="page-head">
+      <div><h3>Security</h3><p>Raid protection, phishing, auto-moderation and intrusion monitoring.</p></div>
+      <a class="btn ghost small" href="/api/export/activity.csv">Export activity CSV</a>
+    </div>
+    <div class="cards">
+      ${kpi('Raid protection', 'sec-raid', sec.raid.active ? '<span class="bad">ACTIVE</span>' : sec.raid.enabled ? '<span class="warn-t">Armed</span>' : '<span class="ok">Off</span>', sec.raid.active ? `Ends ${untilLabel(sec.raid.endsAt)}` : sec.raid.enabled ? 'Window closed' : 'No raid window open')}
+      ${kpi('Members handled', 'sec-actions', fmt(sec.raid.actions), 'Since raid mode was first used')}
+      ${kpi('Phishing blocked (24h)', 'sec-phish', fmt(sec.stats.phishingToday), `${fmt(sec.stats.invitesToday)} invite link(s) removed`)}
+      ${kpi('Blocked words', 'sec-words', fmt(sec.automod.count), `${sec.automod.enabled ? 'Auto-mod on' : 'Auto-mod off'} · max ${sec.automod.maxWords}`)}
+      ${kpi('Anti-phishing', 'sec-antiphish', sec.antiphish.enabled ? '<span class="ok">On</span>' : '<span class="warn-t">Off</span>', sec.antiphish.timeoutMinutes ? `Timeout ${sec.antiphish.timeoutMinutes}m` : 'Delete only')}
+      ${kpi('Alt detection', 'sec-alts', 'Log only', `Accounts under ${sec.alts.youngDays}d flagged`)}
+      ${kpi('Anti-nuke', 'sec-nuke', `${sec.antinuke.threshold} actions`, `Within ${sec.antinuke.windowSeconds}s`)}
+      ${kpi('Security events (24h)', 'sec-events', fmt(sec.stats.securityToday), 'Across all protections')}
+    </div>
+
+    <div class="section"><div class="grid-2">
+      <div class="panel">
+        <div class="section-head"><h4>Raid protection</h4><span class="badge ${sec.raid.active ? 'danger' : sec.raid.enabled ? 'warn' : 'muted'}">${sec.raid.active ? 'active' : sec.raid.enabled ? 'armed' : 'off'}</span></div>
+        <p class="muted" style="font-size:12.5px;margin:0 0 16px">A join flood arms raid mode automatically. New members are timed out and very young accounts are kicked.</p>
+        <form data-endpoint="/api/security/raid">
+          <div class="form-grid">
+            <div class="field"><label>Raid mode</label>${select('enabled', sec.raid.enabled ? 'true' : 'false', [['false', 'Off'], ['true', 'On (starts now)']])}</div>
+            <div class="field"><label>Timeout per member (min)</label>${number('timeoutMinutes', sec.raid.timeoutMinutes, 1, 1440)}</div>
+            <div class="field"><label>Auto trigger — joins</label>${number('joinThreshold', sec.raid.joinThreshold, 2, 100)}</div>
+            <div class="field"><label>Auto trigger — window (s)</label>${number('joinWindowSeconds', sec.raid.joinWindowSeconds, 3, 600)}</div>
+            <div class="field"><label>Kick accounts younger than (h)</label>${number('minAccountAgeHours', sec.raid.minAccountAgeHours, 0, 720)}</div>
+            <div class="field"><label>Auto trigger</label>${select('autoEnabled', sec.raid.autoEnabled ? 'true' : 'false', [['true', 'Enabled'], ['false', 'Disabled']])}</div>
+            <div class="field"><label>Young account action</label>${select('kickYoung', sec.raid.kickYoung ? 'true' : 'false', [['true', 'Kick'], ['false', 'Timeout only']])}</div>
+          </div>
+          <div class="actions"><div class="state">Last auto-trigger: ${sec.raid.lastTriggerAt ? ago(sec.raid.lastTriggerAt) : 'never'}</div><button class="btn" type="submit">Save raid settings</button></div>
+        </form>
+      </div>
+
+      <div>
+        <div class="panel">
+          <div class="section-head"><h4>Anti-phishing</h4><span class="badge ${sec.antiphish.enabled ? 'ok' : 'muted'}">${sec.antiphish.enabled ? 'on' : 'off'}</span></div>
+          <form data-endpoint="/api/security/antiphish">
+            <div class="form-grid">
+              <div class="field"><label>Filter</label>${select('enabled', sec.antiphish.enabled ? 'true' : 'false', [['true', 'Enabled'], ['false', 'Disabled']])}</div>
+              <div class="field"><label>Timeout offender (min, 0 = none)</label>${number('timeoutMinutes', sec.antiphish.timeoutMinutes, 0, 1440)}</div>
+            </div>
+            <div class="actions"><div class="state">Deletes the message and records it in the moderation log.</div><button class="btn" type="submit">Save</button></div>
+          </form>
+        </div>
+        <div class="panel" style="margin-top:16px">
+          <div class="section-head"><h4>Altitude &amp; anti-nuke</h4></div>
+          <div class="kv">
+            <div class="kv-item"><div class="k">Alt detection</div><div class="v">Log only</div></div>
+            <div class="kv-item"><div class="k">Flag younger than</div><div class="v">${sec.alts.youngDays} days</div></div>
+            <div class="kv-item"><div class="k">Nuke threshold</div><div class="v">${sec.antinuke.threshold} actions / ${sec.antinuke.windowSeconds}s</div></div>
+            <div class="kv-item"><div class="k">Nuke response</div><div class="v">Alert owner + raid mode</div></div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+
+    <div class="section">
+      <div class="panel">
+        <div class="section-head"><h4>Auto-moderation</h4><span class="badge ${sec.automod.enabled ? 'ok' : 'muted'}">${sec.automod.enabled ? 'on' : 'off'}</span></div>
+        <form data-endpoint="/api/security/automod">
+          <div class="form-grid">
+            <div class="field"><label>Blocked-word filter</label>${select('enabled', sec.automod.enabled ? 'true' : 'false', [['true', 'Enabled'], ['false', 'Disabled']])}</div>
+            <div class="field"><label>Timeout after strikes</label>${number('timeoutAt', sec.automod.timeoutAt, 1, 20)}</div>
+            <div class="field"><label>Timeout length (min)</label>${number('timeoutMinutes', sec.automod.timeoutMinutes, 1, 1440)}</div>
+          </div>
+          <div class="actions"><div class="state">Invite links are always filtered for members without Manage Messages.</div><button class="btn" type="submit">Save</button></div>
+        </form>
+        <div class="spacer"></div>
+        <div class="section-head" style="margin-bottom:10px"><h4>Blocked words</h4><span class="muted" style="font-size:12px">${sec.automod.count} / ${sec.automod.maxWords}</span></div>
+        <div class="word-list">${words}</div>
+        <form data-endpoint="/api/security/words" class="search" style="margin-top:14px">
+          <input type="hidden" name="action" value="add">
+          <input class="input" name="word" maxlength="${sec.automod.maxWordLength}" placeholder="Add a word or phrase to block…" autocomplete="off">
+          <button class="btn" type="submit">Block word</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-head"><h4>Recent security events</h4><a class="more" href="/activity?kind=security">Open activity →</a></div>
+      <div class="panel">${feedHtml(events)}</div>
+    </div>`;
+  return layout({ active: 'security', title: 'Security', subtitle: 'Protection', content, ready: data.ready, data });
+}
+
 
 function renderControls(data) {
   const action = (id, label, description, confirmText, tone = '') =>
@@ -1127,6 +1333,47 @@ function renderLogin(error = '') {
 </div>
 </body>
 </html>`;
+}
+
+// ---------------------------------------------------------------- exports
+
+function csvCell(value) {
+  const text = value == null ? '' : String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function csvBody(rows) {
+  return rows.map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+}
+
+function sendCsv(res, filename, rows) {
+  return send(res, 200, csvBody(rows), 'text/csv; charset=utf-8', {
+    'Content-Disposition': `attachment; filename="${filename}"`,
+  });
+}
+
+function exportActivityRows() {
+  return [['when', 'kind', 'title', 'detail', 'user'], ...activityFeed(5000).map((item) => [dateLabel(item.at), item.kind, item.title, String(item.detail || '').replace(/<@(\d+)>/g, '$1'), item.userId ?? ''])];
+}
+
+function exportModlogRows() {
+  const entries = store.guild(config.mainGuildId).modlog?.entries ?? [];
+  return [
+    ['when', 'action', 'member', 'moderator', 'reason'],
+    ...entries.map((entry) => [dateLabel(entry.at), entry.action, entry.userId ?? '', entry.moderatorId ?? '', entry.reason ?? '']),
+  ];
+}
+
+function exportFeedbackRows() {
+  const feedback = store.guild(config.mainGuildId).feedback ?? [];
+  return [['when', 'member', 'ticket type', 'rating'], ...feedback.map((item) => [dateLabel(item.at), item.userId ?? '', item.type ?? '', item.rating ?? ''])];
+}
+
+function exportTranscriptRows() {
+  return [
+    ['file', 'channel', 'type', 'opened by', 'closed by', 'messages', 'closed at'],
+    ...listTranscripts().map((item) => [item.name, item.channelName ?? '', item.typeLabel ?? '', item.userId ?? '', item.closedByName ?? '', item.messages ?? '', dateLabel(item.closedAt || item.mtime)]),
+  ];
 }
 
 function renderPage(data = baseData()) {
@@ -1203,6 +1450,11 @@ async function route(req, res) {
       const ok = tokenMatches(body.password);
       recordLogin(ip, ok);
       if (!ok) return send(res, 401, renderLogin('Wrong password. Try again.'), 'text/html; charset=utf-8');
+      activity.record(config.mainGuildId, {
+        kind: 'control',
+        title: 'Dashboard login',
+        detail: `Signed in from ${ip}.`,
+      });
       const next = typeof body.next === 'string' && body.next.startsWith('/') ? body.next : '/';
       return redirect(res, next, { 'Set-Cookie': sessionCookie() });
     }
@@ -1244,6 +1496,23 @@ async function route(req, res) {
     return send(res, 200, JSON.stringify(stats.snapshot(), null, 2), 'application/json; charset=utf-8');
   }
 
+  if (pathname === '/api/security' && req.method === 'GET') {
+    return send(res, 200, JSON.stringify(security.securityData(), null, 2), 'application/json; charset=utf-8');
+  }
+
+  if (pathname === '/api/export/activity.csv' && req.method === 'GET') {
+    return sendCsv(res, 'scoutbot-activity.csv', exportActivityRows());
+  }
+  if (pathname === '/api/export/modlog.csv' && req.method === 'GET') {
+    return sendCsv(res, 'scoutbot-modlog.csv', exportModlogRows());
+  }
+  if (pathname === '/api/export/feedback.csv' && req.method === 'GET') {
+    return sendCsv(res, 'scoutbot-feedback.csv', exportFeedbackRows());
+  }
+  if (pathname === '/api/export/transcripts.csv' && req.method === 'GET') {
+    return sendCsv(res, 'scoutbot-transcripts.csv', exportTranscriptRows());
+  }
+
   if (pathname === '/api/transcripts' && req.method === 'GET') {
     const query = (url.searchParams.get('q') || '').trim().toLowerCase();
     let list = listTranscripts();
@@ -1272,6 +1541,67 @@ async function route(req, res) {
     }
     budget.setPaused(body.paused);
     return send(res, 200, JSON.stringify({ paused: body.paused }), 'application/json; charset=utf-8');
+  }
+
+  if (pathname === '/api/server/config' && req.method === 'POST') {
+    const body = await readBody(req).catch(() => ({}));
+    const guild = guildRef();
+    const normalizeId = (value) => {
+      const id = String(value ?? '').trim();
+      if (!id) return null;
+      if (!/^\d{17,20}$/.test(id)) return false;
+      if (guild && !guild.channels.cache.has(id)) return false;
+      return id;
+    };
+
+    const logChannelId = normalizeId(body.logChannelId);
+    const aiChannelId = normalizeId(body.aiChannelId);
+    const welcomeChannelId = normalizeId(body.welcomeChannelId);
+    if (logChannelId === false || aiChannelId === false || welcomeChannelId === false) {
+      return send(res, 400, JSON.stringify({ ok: false, message: 'Unknown channel ID. Pick a channel from this server.' }), 'application/json; charset=utf-8');
+    }
+
+    const settings = store.guild(config.mainGuildId);
+    settings.logChannelId = logChannelId;
+    if (aiChannelId) store.data.settings.aiChannelId = aiChannelId;
+    else delete store.data.settings.aiChannelId;
+
+    settings.welcome ??= {};
+    settings.welcome.channelId = welcomeChannelId;
+    settings.welcome.enabled = body.welcomeEnabled !== false && body.welcomeEnabled !== 'false';
+    settings.welcome.dmEnabled = body.welcomeDm !== false && body.welcomeDm !== 'false';
+    store.save();
+
+    activity.record(config.mainGuildId, {
+      kind: 'control',
+      title: 'Server configuration updated',
+      detail: 'Log channel, AI channel and welcome settings changed from the dashboard.',
+    });
+    return send(res, 200, JSON.stringify({ ok: true, message: 'Configuration saved.' }), 'application/json; charset=utf-8');
+  }
+
+  if (pathname === '/api/security/raid' && req.method === 'POST') {
+    const body = await readBody(req).catch(() => ({}));
+    const result = security.updateRaid(body, 'dashboard');
+    return send(res, 200, JSON.stringify(result), 'application/json; charset=utf-8');
+  }
+
+  if (pathname === '/api/security/antiphish' && req.method === 'POST') {
+    const body = await readBody(req).catch(() => ({}));
+    const result = security.updateAntiphish(body, 'dashboard');
+    return send(res, 200, JSON.stringify(result), 'application/json; charset=utf-8');
+  }
+
+  if (pathname === '/api/security/automod' && req.method === 'POST') {
+    const body = await readBody(req).catch(() => ({}));
+    const result = security.updateAutomod(body, 'dashboard');
+    return send(res, 200, JSON.stringify(result), 'application/json; charset=utf-8');
+  }
+
+  if (pathname === '/api/security/words' && req.method === 'POST') {
+    const body = await readBody(req).catch(() => ({}));
+    const result = security.editWord(body, 'dashboard');
+    return send(res, result.ok ? 200 : 400, JSON.stringify(result), 'application/json; charset=utf-8');
   }
 
   if (pathname.startsWith('/api/control/') && req.method === 'POST') {
@@ -1307,7 +1637,12 @@ async function route(req, res) {
     return send(res, 200, renderServer(serverDetail(), data), 'text/html; charset=utf-8');
   }
   if (pathname === '/activity') {
-    return send(res, 200, renderActivity(activityFeed(120), data), 'text/html; charset=utf-8');
+    const kind = (url.searchParams.get('kind') || '').trim() || null;
+    const items = kind ? activityFeed(300).filter((item) => item.kind === kind) : activityFeed(120);
+    return send(res, 200, renderActivity(items, data, kind), 'text/html; charset=utf-8');
+  }
+  if (pathname === '/security') {
+    return send(res, 200, renderSecurity(security.securityData(), data), 'text/html; charset=utf-8');
   }
   if (pathname === '/health') {
     return send(res, 200, renderHealth(await healthData(), data), 'text/html; charset=utf-8');
@@ -1364,6 +1699,11 @@ module.exports = {
   snapshot,
   renderPage,
   renderLogin,
+  renderSecurity,
+  renderServer,
+  renderActivity,
+  renderHealth,
+  renderControls,
   renderTranscript,
   listTranscripts,
   readTranscript,
@@ -1371,4 +1711,5 @@ module.exports = {
   healthData,
   serverDetail,
   activityFeed,
+  csvBody,
 };

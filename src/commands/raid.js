@@ -1,37 +1,14 @@
 const { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
-const store = require('../storage');
 const { fail, hasPerm, makeEmbed } = require('../utils');
 const { addModlogEntry } = require('../modlog');
 const raid = require('../raid');
 
 const DEFAULT_DURATION_MINUTES = 30;
-const MAX_DURATION_MINUTES = 1440;
-
-// Turn raid protection on (with a duration) or off. While on, every member who joins the server
-// is automatically timed out for the configured number of minutes.
-async function setRaid(interaction, turningOn, durationMinutes = null) {
-  const config = raid.raidConfig(interaction.guild.id);
-  config.enabled = turningOn;
-  if (durationMinutes) config.timeoutMinutes = Math.min(MAX_DURATION_MINUTES, Math.max(1, durationMinutes));
-  config.endsAt = turningOn ? Date.now() + config.timeoutMinutes * 60_000 : null;
-  store.save();
-
-  const detail = turningOn
-    ? `Raid protection on — members who join are timed out ${config.timeoutMinutes} min (until <t:${Math.floor(config.endsAt / 1000)}:R>).`
-    : 'Raid protection off.';
-  addModlogEntry(interaction.guild.id, {
-    userId: interaction.user.id,
-    action: 'raid',
-    reason: detail,
-    moderatorId: interaction.user.id,
-  });
-  return config;
-}
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('raid')
-    .setDescription('Toggle raid protection: auto-timeout every member who joins the server')
+    .setDescription('Toggle raid protection and tune the automatic join-rate detection')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addBooleanOption((option) =>
       option
@@ -44,7 +21,40 @@ module.exports = {
         .setName('duration')
         .setDescription('Minutes each joining member is timed out (1-1440, default 30)')
         .setMinValue(1)
-        .setMaxValue(MAX_DURATION_MINUTES),
+        .setMaxValue(raid.MAX_TIMEOUT_MINUTES),
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName('auto')
+        .setDescription('Turn raid mode on automatically when too many members join at once')
+        .setRequired(false),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName('joins')
+        .setDescription('Automatic trigger: number of joins in the window (2-100, default 8)')
+        .setMinValue(2)
+        .setMaxValue(100),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName('window')
+        .setDescription('Automatic trigger: window in seconds (3-600, default 20)')
+        .setMinValue(3)
+        .setMaxValue(raid.MAX_WINDOW_SECONDS),
+    )
+    .addIntegerOption((option) =>
+      option
+        .setName('min_age')
+        .setDescription('During a raid, accounts younger than this many hours are kicked (0-720, default 24)')
+        .setMinValue(0)
+        .setMaxValue(raid.MAX_ACCOUNT_AGE_HOURS),
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName('kick_young')
+        .setDescription('During a raid, kick very young accounts instead of only timing them out')
+        .setRequired(false),
     ),
 
   async execute(interaction) {
@@ -53,27 +63,52 @@ module.exports = {
     }
 
     const explicit = interaction.options.getBoolean('enabled');
-    const turningOn = explicit === null ? !raid.raidConfig(interaction.guild.id).enabled : explicit;
+    const duration = interaction.options.getInteger('duration');
+    const auto = interaction.options.getBoolean('auto');
+    const joins = interaction.options.getInteger('joins');
+    const window = interaction.options.getInteger('window');
+    const minAge = interaction.options.getInteger('min_age');
+    const kickYoung = interaction.options.getBoolean('kick_young');
 
-    if (!turningOn) {
-      const config = await setRaid(interaction, false);
-      await interaction.reply({
-        embeds: [makeEmbed('success', '🛡️ Raid mode off', 'New members can join again.')] ,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
+    const patch = {};
+    if (duration !== null) patch.timeoutMinutes = duration;
+    if (auto !== null) patch.autoEnabled = auto;
+    if (joins !== null) patch.joinThreshold = joins;
+    if (window !== null) patch.joinWindowSeconds = window;
+    if (minAge !== null) patch.minAccountAgeHours = minAge;
+    if (kickYoung !== null) patch.kickYoung = kickYoung;
 
-    const duration = interaction.options.getInteger('duration') ?? DEFAULT_DURATION_MINUTES;
-    const config = await setRaid(interaction, true, duration);
+    const turningOn = explicit === null ? !raid.isRaidActive(interaction.guild.id) : explicit;
+    patch.enabled = turningOn;
+
+    const config = raid.setRaid(interaction.guild.id, patch, {
+      record: true,
+      actorId: interaction.user.id,
+      detail: `Changed with /raid by ${interaction.user.username}.`,
+    });
+
+    const note = duration === null && turningOn ? ` Protection ends automatically <t:${Math.floor(config.endsAt / 1000)}:R>.` : '';
+
+    addModlogEntry(interaction.guild.id, {
+      userId: interaction.user.id,
+      action: 'raid',
+      reason: turningOn
+        ? `Raid protection on: ${config.timeoutMinutes} min timeout, auto at ${config.joinThreshold} joins/${config.joinWindowSeconds}s.`
+        : 'Raid protection off.',
+      moderatorId: interaction.user.id,
+    });
+
+    const lines = [
+      `Members who join are timed out for **${config.timeoutMinutes} min**${note}`,
+      `Automatic trigger: **${config.autoEnabled ? 'on' : 'off'}** (${config.joinThreshold} joins in ${config.joinWindowSeconds}s)`,
+      `Young accounts: ${config.kickYoung ? `kicked when younger than ${config.minAccountAgeHours}h` : `only timed out (threshold ${config.minAccountAgeHours}h)`}`,
+    ];
+
     return interaction.reply({
       embeds: [
-        makeEmbed(
-          'warn',
-          '🛡️ Raid mode on',
-          `Every member who joins is automatically timed out for **${config.timeoutMinutes} min**.\nProtection ends automatically: <t:${Math.floor(config.endsAt / 1000)}:R>.`,
-        ),
+        makeEmbed(turningOn ? 'warn' : 'success', turningOn ? 'Raid mode on' : 'Raid mode off', lines.join('\n')),
       ],
+      flags: MessageFlags.Ephemeral,
     });
   },
 };
