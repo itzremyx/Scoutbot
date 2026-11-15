@@ -1,10 +1,12 @@
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const path = require('path');
+const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const { drawEditorFrame, THEMES } = require('./rankcard');
 
+// Japanese glyphs: Noto Sans JP is registered in rankcard.js (required above); add it to the stacks.
 const W = 900;
 const H = 340;
-const FONT = '22px Consolas, "Cascadia Mono", "Courier New", monospace';
-const TEXT_FONT = '20px Consolas, "Cascadia Mono", "Courier New", monospace';
+const FONT = '22px "Noto Sans JP", Consolas, "Cascadia Mono", "Courier New", monospace';
+const TEXT_FONT = '20px "Noto Sans JP", Consolas, "Cascadia Mono", "Courier New", monospace';
 
 const SYNTAX = {
   keyword: '#569cd6',
